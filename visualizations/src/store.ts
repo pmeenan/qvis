@@ -1,15 +1,6 @@
-import Vue from "vue";
-import Vuex from "vuex";
+import { createPinia } from "pinia";
 
-import ConnectionStore from "@/store/ConnectionStore"
-import ConfigurationStore from "@/store/ConfigurationStore"
+export { useConnectionStore } from "@/store/ConnectionStore";
+export { useConfigurationStore } from "@/store/ConfigurationStore";
 
-Vue.use(Vuex);
-
-export default new Vuex.Store({
-    //strict: process.env.NODE_ENV !== 'production',
-    modules: {
-        connections: ConnectionStore,
-        configurations: ConfigurationStore, 
-    },
-});
+export default createPinia();

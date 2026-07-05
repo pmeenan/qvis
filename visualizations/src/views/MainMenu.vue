@@ -1,54 +1,47 @@
 <template>
-    <b-container id="MainMenu" fluid>
-        <!--
-        <b-row>
-            <b-col cols="1" md="auto">qvis</b-col>
-            <b-col>
-                <router-link to="/files">Manage files</router-link> |
-                <router-link to="/sequence">Sequence</router-link> |
-                <router-link to="/congestion">Congestion</router-link>
-            </b-col>
-        </b-row>
-        -->
-        <!-- <b-tabs
-            active-nav-item-class="font-weight-bold text-uppercase text-danger"
-            active-tab-class="font-weight-bold text-success"
-            content-class="mt-3"
-        >
-            <b-tab title="First" active><router-link to="/files">Manage files</router-link></b-tab>
-            <b-tab title="Second"><b-link to="/sequence">Sequence</b-link></b-tab>
-            <b-tab title="Disabled" disabled><p>I'm a disabled tab!</p></b-tab>
-        </b-tabs> -->
-        <b-row>
-            <b-col cols="1" md="auto" class="align-middle"><h3 style="width: 290px;">qvis</h3></b-col>
-            <b-col>
-                <b-nav tabs align="center">
-                    <b-nav-item to="/files" class="files-link" :active="this.$route.fullPath.indexOf('/files') >= 0 || $route.fullPath === ''">
+    <div id="MainMenu" class="container-fluid">
+        <div class="row">
+            <div class="col-1 col-md-auto align-middle"><h3 style="width: 290px;">qvis</h3></div>
+            <div class="col">
+                <ul class="nav nav-tabs justify-content-center">
+                    <li v-if="!embeddedMode" class="nav-item files-link">
+                        <router-link to="/files" class="nav-link" :class="{ active: route.fullPath.indexOf('/files') >= 0 || route.fullPath === '' }">
                         Manage files
-                    </b-nav-item>
-                    <b-nav-item to="/sequence" class="sequence-link" :active="$route.fullPath.indexOf('/sequence') >= 0">
+                        </router-link>
+                    </li>
+                    <li class="nav-item sequence-link">
+                        <router-link to="/sequence" class="nav-link" :class="{ active: route.fullPath.indexOf('/sequence') >= 0 }">
                         Sequence
-                    </b-nav-item>
-                    <b-nav-item to="/congestion" class="congestion-link" :active="$route.fullPath.indexOf('/congestion') >= 0">
+                        </router-link>
+                    </li>
+                    <li class="nav-item congestion-link">
+                        <router-link to="/congestion" class="nav-link" :class="{ active: route.fullPath.indexOf('/congestion') >= 0 }">
                         Congestion
-                    </b-nav-item>
-                    <b-nav-item to="/multiplexing" class="multiplexing-link" :active="$route.fullPath.indexOf('/multiplexing') >= 0">
+                        </router-link>
+                    </li>
+                    <li class="nav-item multiplexing-link">
+                        <router-link to="/multiplexing" class="nav-link" :class="{ active: route.fullPath.indexOf('/multiplexing') >= 0 }">
                         Multiplexing
-                    </b-nav-item>
-                    <b-nav-item to="/packetization" class="packetization-link" :active="$route.fullPath.indexOf('/packetization') >= 0">
+                        </router-link>
+                    </li>
+                    <li class="nav-item packetization-link">
+                        <router-link to="/packetization" class="nav-link" :class="{ active: route.fullPath.indexOf('/packetization') >= 0 }">
                         Packetization
-                    </b-nav-item>
-                    <b-nav-item to="/stats" class="stats-link" :active="$route.fullPath.indexOf('/stats') >= 0">
+                        </router-link>
+                    </li>
+                    <li class="nav-item stats-link">
+                        <router-link to="/stats" class="nav-link" :class="{ active: route.fullPath.indexOf('/stats') >= 0 }">
                         qlog stats
-                    </b-nav-item>
-                </b-nav>
-            </b-col>
-            <b-col cols="1" md="auto">
-                <b-button variant="success" href="https://github.com/quiclog/qvis/issues/new?template=feature_request.md&amp;title=Feature+request" target="_blank" style="margin-right: 5px;">Request feature</b-button>
-                <b-button variant="danger"  href="https://github.com/quiclog/qvis/issues/new?template=bug-report-in-live-version.md&amp;title=Bug+in+live+version" target="_blank">Report issue</b-button>
-            </b-col>
-        </b-row>
-    </b-container>
+                        </router-link>
+                    </li>
+                </ul>
+            </div>
+            <div v-if="!embeddedMode" class="col-1 col-md-auto">
+                <a class="btn btn-success" href="https://github.com/quiclog/qvis/issues/new?template=feature_request.md&amp;title=Feature+request" target="_blank" style="margin-right: 5px;">Request feature</a>
+                <a class="btn btn-danger" href="https://github.com/quiclog/qvis/issues/new?template=bug-report-in-live-version.md&amp;title=Bug+in+live+version" target="_blank">Report issue</a>
+            </div>
+        </div>
+    </div>
 </template>
 
 <style scoped>
@@ -79,7 +72,6 @@
         border-bottom: none;
     }
 
-    /* using the bootstrapvue built-in "active-class" doesn't work due to precedence weirdness*/
     #MainMenu li.files-link a.active {
         color: black;
         font-weight: bold;
@@ -130,19 +122,15 @@
 
 </style>
 
-<script lang="ts">
-    import { getModule } from "vuex-module-decorators";
-    import { Component, Vue } from "vue-property-decorator";
-    import HelloWorld from "@/components/HelloWorld.vue";
+<script setup lang="ts">
+    import { onMounted } from "vue";
+    import { useRoute } from "vue-router";
+    import { isEmbeddedMode } from "@/embed";
 
-    import ConnectionStore from "@/store/ConnectionStore";
-    import ConnectionGroup from "@/data/ConnectionGroup";
+    const route = useRoute();
+    const embeddedMode = isEmbeddedMode();
 
-    @Component({})
-    export default class VUEDebug extends Vue {
-        public mounted(){
-            console.log( this.$route );
-        }
-    }
-
+    onMounted(() => {
+        console.log( route );
+    });
 </script>

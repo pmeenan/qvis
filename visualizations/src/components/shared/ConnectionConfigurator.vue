@@ -1,46 +1,63 @@
 <template>
-    <b-col style="background-color: white; color: black; border: black 1px solid; max-width: 50%;">
-        <b-container fluid>
+    <div class="col" style="background-color: white; color: black; border: black 1px solid; max-width: 50%;">
+        <div class="container-fluid">
             <div v-if="allowGroupSelection && !allowConnectionSelection">
-                <b-form-select v-model="selectedGroup" :options="groupOptions" @change="onGroupSelectionChanged" class="mb-3 mt-3" />
+                <select v-model="selectedGroup" class="form-select mb-3 mt-3" @change="onGroupSelectionChanged(selectedGroup)">
+                    <option v-for="option in groupOptions" :key="option.text" :value="option.value" :disabled="option.disabled">
+                        {{ option.text }}
+                    </option>
+                </select>
             </div>
 
             <div v-else>
                 <div v-if="tooManyOptions">
                     <!-- separate-select mode -->
                     <!--<div>{{selectedGroup.filename}} - {{selectedGroup.description}}</div> -->
-                    <b-form-select v-model="selectedGroup" :options="groupOptions" @change="onGroupSelectionChanged" class="mb-3 mt-3" />
+                    <select v-model="selectedGroup" class="form-select mb-3 mt-3" @change="onGroupSelectionChanged(selectedGroup)">
+                        <option v-for="option in groupOptions" :key="option.text" :value="option.value" :disabled="option.disabled">
+                            {{ option.text }}
+                        </option>
+                    </select>
 
                     <!--<div>{{selectedConnection.events.length}} - {{selectedConnection.parent.description}}</div> -->
-                    <b-form-select v-model="selectedConnection" :options="connectionOptions" @change="onConnectionSelectionChanged" class="mb-3" />
+                    <select v-model="selectedConnection" class="form-select mb-3" @change="onConnectionSelectionChanged(selectedConnection)">
+                        <option v-for="option in connectionOptions" :key="option.text" :value="option.value" :disabled="option.disabled">
+                            {{ option.text }}
+                        </option>
+                    </select>
                 
-                    <b-button v-if="canBeRemoved" @click="removeMyself">&minus;</b-button> 
+                    <button v-if="canBeRemoved" type="button" class="btn btn-secondary" @click="removeMyself">&minus;</button> 
                 </div>
 
                 <div v-else>
                     <!-- combined-select mode -->
-                    <b-row class="mt-3">
-                        <b-col><div>{{selectedConnection.parent.filename}} ({{selectedConnection.parent.description}})</div></b-col>
-                        <b-col cols="2" v-if="numericalInputName"><div v-b-tooltip.hover title="This value is automatically calculated, but can be manually adjusted.">{{numericalInputName}} : </div></b-col>
-                        <b-col style="max-width: 36px;" v-if="canBeRemoved"></b-col>
-                    </b-row>
-                    <b-row class="mb-3">
-                        <b-col><b-form-select v-model="selectedConnection" :options="combinedOptions" @change="onConnectionSelectionChanged"  /></b-col>
-                        <b-col cols="2" v-if="numericalInputName"><b-input type="number" v-model="numericalValue" @change="onNumericalValueUpdated" /></b-col>
-                        <b-col cols="auto" v-if="canBeRemoved" class="px-0"><b-button @click="removeMyself">&minus;</b-button></b-col>
-                    </b-row>
+                    <div class="row mt-3">
+                        <div class="col"><div>{{selectedConnection?.parent.filename}} ({{selectedConnection?.parent.description}})</div></div>
+                        <div class="col-2" v-if="numericalInputName"><div title="This value is automatically calculated, but can be manually adjusted.">{{numericalInputName}} : </div></div>
+                        <div style="max-width: 36px;" v-if="canBeRemoved"></div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <select v-model="selectedConnection" class="form-select" @change="onConnectionSelectionChanged(selectedConnection)">
+                                <option v-for="option in combinedOptions" :key="option.text" :value="option.value" :disabled="option.disabled">
+                                    {{ option.text }}
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-2" v-if="numericalInputName"><input type="number" class="form-control" v-model="numericalValue" @change="onNumericalValueUpdated(numericalValue)" /></div>
+                        <div class="col-auto px-0" v-if="canBeRemoved"><button type="button" class="btn btn-secondary" @click="removeMyself">&minus;</button></div>
+                    </div>
                 </div>
 
                 
             </div>
         
-        </b-container>
-    </b-col>
+        </div>
+    </div>
 </template> 
 
-<script lang="ts">
-    import { getModule } from "vuex-module-decorators";
-    import { Component, Vue, Prop, Watch } from "vue-property-decorator";
+<script setup lang="ts">
+    import { computed, ref, watch } from "vue";
 
     import ConnectionGroup from "@/data/ConnectionGroup";
     import Connection from "@/data/Connection";
@@ -51,88 +68,106 @@
     // So we pass in all possible ConnectionGroups (this.allGroups) and then allow the user to select the connection they want
     // We provide two modes: all in 1 select (when there aren't too many options) and 2 selects (1 for the group, then the connection)
     // This latter one is for when there are too many options and a single select would be too unwieldy
-    @Component
-    export default class ConnectionConfigurator extends Vue { 
-        @Prop()
-         // passing in connection allows us to set it externally as well (e.g., loading from config string, loading premade testcase)
-        protected connection!:Connection;
+    const props = withDefaults(defineProps<{
+        // passing in connection allows us to set it externally as well (e.g., loading from config string, loading premade testcase)
+        connection?: Connection;
+        group?: ConnectionGroup;
+        allGroups: Array<ConnectionGroup>;
+        numericalInputValue?: number;
+        numericalInputName?: string;
+        canBeRemoved?: boolean;
+        allowGroupSelection?: boolean;
+        allowConnectionSelection?: boolean;
+        onGroupSelected?: (group: ConnectionGroup) => void;
+        onConnectionSelected?: (conn: QlogConnection) => void;
+        onNumericalValueChanged?: (offset:number) => void;
+        onRemoved?: () => void;
+    }>(), {
+        canBeRemoved: true,
+        allowGroupSelection: false,
+        allowConnectionSelection: true,
+    });
 
-        @Prop()
-        protected group!:ConnectionGroup;
+    const selectedConnection = ref<Connection | undefined>(props.connection);
+    const selectedGroup = ref<ConnectionGroup>(props.group ? props.group : props.connection!.parent);
+    const numericalValue = ref<number | undefined>(props.numericalInputValue);
 
-        @Prop()
-        protected allGroups!:Array<ConnectionGroup>; 
+    // Firstly, when we change our selection from inside this component, we propagate it to our parent in onSelectionChanged
+    // The parent then sets this.connection, but this.selectedGroup is not automatically co-updated
+    // so, we manually do that here.
+    // Secondly, if we change the connection from outside, this.selectedConnection is not updated, so we do that here
+    // TODO: this feels dirty... figure out a better way to do two-way binding of these vars between outside and inside
+    watch(() => props.connection, (newConnection, oldConnection) => {
+        if ( !newConnection ) {
+            return;
+        }
 
-        @Prop()
-        protected numericalInputValue?:number;
+        console.log("ConnectionConfigurator:onConnectionChanged : setting selectedGroup : ", newConnection.title, oldConnection?.title, newConnection, oldConnection);
+        selectedGroup.value = newConnection.parent;
+        if ( selectedConnection.value !== newConnection ) {
+            selectedConnection.value = newConnection;
+        }
 
-        @Prop()
-        protected numericalInputName?:string;
+        numericalValue.value = props.numericalInputValue;
+    }, { immediate: false, deep: false });
 
-        @Prop({ default: true })
-        protected canBeRemoved!:boolean;
+    const tooManyOptions = computed(() => {
+        // TODO: we can do this without creating the combinedOptions array with a for-loop
+        // TODO: maybe allow passing as a prop?
+        return combinedOptions.value.length > 30;
+    });
 
-        @Prop({ default: false })
-        protected allowGroupSelection!:boolean;
+    // The template renders these as native select options.
+    // used in separate-select mode
+    const groupOptions = computed(() => {
+        const options:any = [];
+        for ( const group of props.allGroups ) {
+            options.push( { value: group, text: group.filename + " (" + (group.title ? group.title + " : " : "") + group.description + ")" } );
+        }
 
-        @Prop({ default: true })
-        protected allowConnectionSelection!:boolean;
+        return options;
+    });
 
-        @Prop()
-        protected onGroupSelected!:(group: ConnectionGroup) => void;
+    // used in separate-select mode
+    const connectionOptions = computed(() => {
+        const options:any = [];
+        for ( const connection of selectedGroup.value.getConnections() ) {
 
-        @Prop()
-        protected onConnectionSelected!:(conn: QlogConnection) => void;
+            let connectionName = "";
+            if ( connection.vantagePoint ){
+                if (connection.vantagePoint.name){
+                    connectionName += connection.vantagePoint.name + " : ";
+                }
+                if (connection.vantagePoint.type){
+                    connectionName += connection.vantagePoint.type;
+                }
+                else {
+                    connectionName += "UNKNOWN";
+                }
 
-        @Prop()
-        protected onNumericalValueChanged!:(offset:number) => void;
-
-        @Prop()
-        protected onRemoved!:() => void;
-
-        protected selectedConnection:Connection = this.connection;
-        protected selectedGroup:ConnectionGroup = (this.group) ? this.group : this.connection.parent;
-
-        protected numericalValue?:number = this.numericalInputValue;
-
-        // Firstly, when we change our selection from inside this component, we propagate it to our parent in onSelectionChanged
-        // The parent then sets this.connection, but this.selectedGroup is not automatically co-updated
-        // so, we manually do that here. 
-        // Secondly, if we change the connection from outside, this.selectedConnection is not updated, so we do that here
-        // TODO: this feels dirty... figure out a better way to do two-way binding of these vars between outside and inside 
-        @Watch('connection', { immediate: false, deep: false })
-        protected onConnectionChanged(newConnection: Connection, oldConnection: Connection) {
-            console.log("ConnectionConfigurator:onConnectionChanged : setting selectedGroup : ", newConnection.title, oldConnection.title, newConnection, oldConnection);
-            this.selectedGroup = newConnection.parent;
-            if ( this.selectedConnection !== newConnection ) {
-                this.selectedConnection = newConnection;
+                connectionName += (connection.vantagePoint && connection.vantagePoint.flow) ? " (flow = " + connection.vantagePoint.flow + ") : " : " : ";
+            }
+            if ( connection.title ) {
+                connectionName += connection.title;
+            }
+            if (connection.description) {
+                connectionName +=  " : " + connection.description;
             }
 
-            this.numericalValue = this.numericalInputValue;
+            options.push( { value: connection, text: connectionName } );
         }
 
-        protected get tooManyOptions(){
-            // TODO: we can do this without creating the combinedOptions array with a for-loop
-            // TODO: maybe allow passing as a prop? 
-            return this.combinedOptions.length > 30; 
-        }
+        return options;
+    });
 
-        // <b-form-select> expects things to be in a certain format to render correctly 
-        // used in separate-select mode
-        protected get groupOptions(){
-            const options:any = [];
-            for ( const group of this.allGroups ) {
-                options.push( { value: group, text: group.filename + " (" + (group.title ? group.title + " : " : "") + group.description + ")" } );
-            } 
+    // used in combined-select mode
+    const combinedOptions = computed(() => {
+        const options:any = [];
 
-            return options;
-        }
+        for ( const group of props.allGroups ) {
+            options.push( { value: null, text: group.filename, disabled: !props.allowGroupSelection } );
 
-        // used in separate-select mode
-        protected get connectionOptions(){ 
-            const options:any = [];
-            for ( const connection of this.selectedGroup.getConnections() ) {
-
+            for ( const connection of group.getConnections() ) {
                 let connectionName = "";
                 if ( connection.vantagePoint ){
                     if (connection.vantagePoint.name){
@@ -154,80 +189,47 @@
                     connectionName +=  " : " + connection.description;
                 }
 
-                options.push( { value: connection, text: connectionName } );
-            }
-
-            return options;
-        }
-
-        // used in combined-select mode
-        protected get combinedOptions(){ 
-            const options:any = [];
-
-            for ( const group of this.allGroups ) {
-                options.push( { value: null, text: group.filename, disabled: !this.allowGroupSelection } );
-
-                for ( const connection of group.getConnections() ) {
-                    let connectionName = "";
-                    if ( connection.vantagePoint ){
-                        if (connection.vantagePoint.name){
-                            connectionName += connection.vantagePoint.name + " : ";
-                        }
-                        if (connection.vantagePoint.type){
-                            connectionName += connection.vantagePoint.type;
-                        }
-                        else {
-                            connectionName += "UNKNOWN";
-                        }
-
-                        connectionName += (connection.vantagePoint && connection.vantagePoint.flow) ? " (flow = " + connection.vantagePoint.flow + ") : " : " : ";
-                    }
-                    if ( connection.title ) {
-                        connectionName += connection.title;
-                    }
-                    if (connection.description) {
-                        connectionName +=  " : " + connection.description;
-                    }
-                    
-                    options.push( { value: connection, text: "↳ " + connectionName } );
-                }
-            }
-
-            return options;
-        }
-
-        // used in separate-select mode
-        protected onGroupSelectionChanged(newlySelected:ConnectionGroup){
-            // this.selectedGroup is the PREVIOUS selection for some reason 
-            console.log("Selected a new group", this.selectedGroup, newlySelected);
-
-            if ( this.allowGroupSelection && this.onGroupSelected ){
-                this.onGroupSelected( this.selectedGroup );
-            }
-
-            if ( this.allowConnectionSelection ){
-                // auto-select the first connection in the list
-                this.selectedConnection = newlySelected.getConnections()[0];
-
-                this.onConnectionSelectionChanged( this.selectedConnection );
+                options.push( { value: connection, text: "↳ " + connectionName } );
             }
         }
 
-        // used in separate-select and combined-select mode
-        protected onConnectionSelectionChanged(newlySelected:Connection){
-            console.log("Selected a new connection", this.selectedConnection, newlySelected);
-            this.onConnectionSelected( newlySelected );
+        return options;
+    });
+
+    // used in separate-select mode
+    function onGroupSelectionChanged(newlySelected:ConnectionGroup){
+        // this.selectedGroup is the PREVIOUS selection for some reason
+        console.log("Selected a new group", selectedGroup.value, newlySelected);
+
+        if ( props.allowGroupSelection && props.onGroupSelected ){
+            props.onGroupSelected( selectedGroup.value );
         }
 
-        protected removeMyself(){
-            this.onRemoved();
+        if ( props.allowConnectionSelection ){
+            // auto-select the first connection in the list
+            selectedConnection.value = newlySelected.getConnections()[0];
+
+            onConnectionSelectionChanged( selectedConnection.value );
+        }
+    }
+
+    // used in separate-select and combined-select mode
+    function onConnectionSelectionChanged(newlySelected:Connection | null | undefined){
+        if ( !newlySelected ) {
+            return;
         }
 
-        protected onNumericalValueUpdated(val:any){
-            if ( this.onNumericalValueChanged ) {
-                this.onNumericalValueChanged( parseFloat(val) );
-            }
-        }
-    } 
+        console.log("Selected a new connection", selectedConnection.value, newlySelected);
+        props.onConnectionSelected?.( newlySelected );
+    }
 
+    function removeMyself(){
+        props.onRemoved?.();
+    }
+
+    function onNumericalValueUpdated(val:any){
+        if ( props.onNumericalValueChanged ) {
+            props.onNumericalValueChanged( parseFloat(val) );
+        }
+    }
 </script>

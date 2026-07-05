@@ -4,14 +4,6 @@
     </div>
 </template> 
 
-<script lang="ts">
-    import { Component, Vue } from "vue-property-decorator";
+<script setup lang="ts">
     import FileManagerContainer from "@/components/filemanager/FileManagerContainer.vue";
-
-    @Component({
-        components: {
-            FileManagerContainer,
-        },
-    })
-    export default class FileManager extends Vue {} 
 </script>

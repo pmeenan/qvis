@@ -1,4 +1,5 @@
 import QlogConnection from "@/data/Connection"
+import { markRaw } from "vue";
 
 // This is basically the wrapper for a single qlog file, which contains multiple traces ("connections")
 // NOTE: this has nothing directly to do with the "group_id" concept! 
@@ -17,10 +18,11 @@ export default class QlogConnectionGroup {
 
     public summary:any;
 
-    private connections:Array<QlogConnection>;
+    public connections:Array<QlogConnection>;
 
     public constructor() {
-        this.connections = new Array<QlogConnection>();
+        markRaw(this);
+        this.connections = markRaw(new Array<QlogConnection>());
         this.version = "";
         this.format = "JSON";
         this.filename = "";
@@ -28,10 +30,10 @@ export default class QlogConnectionGroup {
         this.URLshort = "";
         this.title = "";
         this.description = "";
-        this.summary = {};
+        this.summary = markRaw({});
     }
 
-    public addConnection( connection:QlogConnection ):void { this.connections.push( connection ); }
+    public addConnection( connection:QlogConnection ):void { this.connections.push( markRaw(connection) ); }
     public getConnections() { return this.connections; }
 
     public getShorthand(){

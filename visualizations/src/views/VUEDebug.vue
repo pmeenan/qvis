@@ -2,11 +2,11 @@
     <div class="home">
         <HelloWorld msg="This is the VUE debugger to test reactive data coupling"/>
 
-        <b-button @click="AddRandomConnection()">Add new random ConnectionGroup</b-button> | 
-        <b-button @click="DeleteFirstConnection()">Delete First</b-button> | 
-        <b-button @click="ChangeConnectionName()">Change Connection Name</b-button> | 
-        <b-button @click="ChangeEventName()">Change Event Name</b-button> | 
-        <b-button @click="RemoveEvent()">RemoveEvent</b-button>
+        <button type="button" class="btn btn-secondary" @click="AddRandomConnection()">Add new random ConnectionGroup</button> | 
+        <button type="button" class="btn btn-secondary" @click="DeleteFirstConnection()">Delete First</button> | 
+        <button type="button" class="btn btn-secondary" @click="ChangeConnectionName()">Change Connection Name</button> | 
+        <button type="button" class="btn btn-secondary" @click="ChangeEventName()">Change Event Name</button> | 
+        <button type="button" class="btn btn-secondary" @click="RemoveEvent()">RemoveEvent</button>
 
         <div v-for="connectionGroup in groups" v-bind:key="connectionGroup.description">
             {{ connectionGroup.description }}
@@ -20,69 +20,57 @@
     </div>
 </template> 
 
-<script lang="ts">
-    import { getModule } from "vuex-module-decorators";
-    import { Component, Vue } from "vue-property-decorator";
+<script setup lang="ts">
+    import { computed, onBeforeMount } from "vue";
     import HelloWorld from "@/components/HelloWorld.vue";
 
-    import ConnectionStore from "@/store/ConnectionStore";
+    import { useConnectionStore } from "@/store/ConnectionStore";
     import ConnectionGroup from "@/data/ConnectionGroup";
 
-    @Component({
-        components: {
-            HelloWorld,
-        },
-    })
-    export default class VUEDebug extends Vue {
+    const store = useConnectionStore();
 
-        protected store:ConnectionStore = getModule(ConnectionStore, this.$store);
-
-        get groups() {
-            return this.store.groups;
+    const groups = computed(() => store.groups);
+    const connections = computed(() => {
+        if ( store.groups.length > 0 ) {
+            return store.groups[ store.groups.length - 1 ].getConnections();
         }
-
-        get connections() {
-            if ( this.store.groups.length > 0 ) {
-                return this.store.groups[ this.store.groups.length - 1 ].getConnections();
-            }
-            else {
-                return undefined;
-            }
+        else {
+            return undefined;
         }
+    });
 
-        protected created(){
-            // TODO: only here for debug reasons obviously
-            if ( this.store.groups.length <= 1 ){
-                this.AddRandomConnection();
-                this.AddRandomConnection();
-                this.AddRandomConnection();
-            }
+    onBeforeMount(() => {
+        // TODO: only here for debug reasons obviously
+        if ( store.groups.length <= 1 ){
+            AddRandomConnection();
+            AddRandomConnection();
+            AddRandomConnection();
         }
+    });
 
-        protected AddRandomConnection() {
-            const filename:string = "RandomConnectionGroup " + Math.round(Math.random() * 100);
-            this.store.DEBUG_LoadRandomFile( filename ).then((cgroup:ConnectionGroup) => {
-                console.log("ConnectionGroup added. This is called AFTER the mutation has been committed to the store!", cgroup);
-            });
-        }
+    function AddRandomConnection() {
+        const filename:string = "RandomConnectionGroup " + Math.round(Math.random() * 100);
+        store.DEBUG_LoadRandomFile( filename ).then((cgroup:ConnectionGroup) => {
+            console.log("ConnectionGroup added. This is called AFTER the mutation has been committed to the store!", cgroup);
+        });
+    }
 
-        protected DeleteFirstConnection() {
-            this.store.deleteGroup( this.groups[0] );
-        }
+    function DeleteFirstConnection() {
+        store.deleteGroup( groups.value[0] );
+    }
 
-        protected ChangeEventName() { 
-            this.connections![0].getEvents()[0][2] = "Event was changed";
-            console.log("Event name was changed, but SHOULD NOT reflect in UI since events are no longer reactive!", this.connections![0]);
-        }
+    function ChangeEventName() {
+        connections.value![0].getEvents()[0][2] = "Event was changed";
+        console.log("Event name was changed, but SHOULD NOT reflect in UI since events are no longer reactive!", connections.value![0]);
+    }
 
-        protected ChangeConnectionName() { 
-            this.connections![0].title = "Connection name was changed";
-            console.log("Connection name was changed", this.connections![0]);
-        }
+    function ChangeConnectionName() {
+        connections.value![0].title = "Connection name was changed";
+        console.log("Connection name was changed", connections.value![0]);
+    }
 
-        protected RemoveEvent() {
-            const events = this.connections![0].getEvents();
-            events.splice( events.length - 1, 1 );
-        }
-    } 
+    function RemoveEvent() {
+        const events = connections.value![0].getEvents();
+        events.splice( events.length - 1, 1 );
+    }
 </script>

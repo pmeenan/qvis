@@ -1,143 +1,138 @@
 <template>
-    <b-container id="multiplexingToplevelContainer" fluid style="width: 100%;">
-        <b-row align-v="center" style="text-align: center;">
-            <b-col cols="12">
+    <div id="multiplexingToplevelContainer" class="container-fluid" style="width: 100%;">
+        <div class="row align-items-center" style="text-align: center;">
+            <div class="col-12">
                 <h4>{{(connection !== undefined) ? connection.parent.filename + " : " + connection.getLongName() : ""}}</h4>
-            </b-col>
-        </b-row>
-        <b-row v-if="showstreamdetail" style="width: 100%;" align-v="center">
-            <b-col cols="1">
+            </div>
+        </div>
+        <div v-if="showstreamdetail" class="row align-items-center" style="width: 100%;">
+            <div class="col-1">
                 Selected stream's details
-            </b-col>
-            <b-col cols="11">
+            </div>
+            <div class="col-11">
                 <div>
-                    <span :style="streamDetail.style">&nbsp;</span> Stream <span class="font-weight-bold">{{ streamDetail.stream_id }}</span> : Requested at {{ streamDetail.data.requestTime.toFixed(2) }}ms. Transmitted from {{ streamDetail.data.startTime.toFixed(2) }}ms to {{streamDetail.data.endTime.toFixed(2)}}ms ({{ (streamDetail.data.endTime.toFixed(2) - streamDetail.data.startTime.toFixed(2)).toFixed(2) }}ms). {{streamDetail.data.totalData}} bytes spread over {{streamDetail.data.frameCount}} frames (including retransmits).
+                    <span :style="streamDetail.style">&nbsp;</span> Stream <span class="fw-bold">{{ streamDetail.stream_id }}</span> : Requested at {{ streamDetail.data.requestTime.toFixed(2) }}ms. Transmitted from {{ streamDetail.data.startTime.toFixed(2) }}ms to {{streamDetail.data.endTime.toFixed(2)}}ms ({{ (streamDetail.data.endTime.toFixed(2) - streamDetail.data.startTime.toFixed(2)).toFixed(2) }}ms). {{streamDetail.data.totalData}} bytes spread over {{streamDetail.data.frameCount}} frames (including retransmits).
                     <br/>
                     <div v-if="streamDetail.data.h3Info !== null">
                         HTTP/3 HEADERS seen at {{ streamDetail.data.h3Info.headersTime.toFixed(2) }}ms. HTTP/3 PRIORITY Update seen at {{ streamDetail.data.h3Info.priorityUpdateTime.toFixed(2) }}ms. Priority info (if any): {{ streamDetail.data.h3Info.priorityString }}
                     </div>
                 </div>
-            </b-col>
-        </b-row>
-        <b-row v-if="showwaterfall" style="height: 165px; width: 100%;" align-v="center">
-            <b-col cols="1">
+            </div>
+        </div>
+        <div v-if="showwaterfall" class="row align-items-center" style="height: 165px; width: 100%;">
+            <div class="col-1">
                 Waterfall
-            </b-col>
-            <b-col cols="11">
+            </div>
+            <div class="col-11">
                 <div style="width: 100%; height: 165px; overflow-y: auto;"> <!-- wrapper to prevent issues with width calculations due to the potential vertical scrollbar -->
                     <div :id="id_waterfall" >
                     </div>
                 </div>
-            </b-col>
-        </b-row>
-        <b-row style="height: 5px;">
-        </b-row>
-        <b-row style="height: 70px;  width: 100%; border: 1px solid red; display: none;" align-v="center">
-            <b-col cols="1">
+            </div>
+        </div>
+        <div class="row" style="height: 5px;">
+        </div>
+        <div class="row align-items-center" style="height: 70px;  width: 100%; border: 1px solid red; display: none;">
+            <div class="col-1">
                 Simulated FIFO order
-            </b-col>
-            <b-col cols="11">
+            </div>
+            <div class="col-11">
                 <div :id="id_fifo" style="width: 100%;">
                 </div>
-            </b-col>
-        </b-row>
-        <b-row style="height: 5px;">
-        </b-row>
-        <b-row style="height: 110px; width: 100%;" align-v="center">
-            <b-col cols="1">
+            </div>
+        </div>
+        <div class="row" style="height: 5px;">
+        </div>
+        <div class="row align-items-center" style="height: 110px; width: 100%;">
+            <div class="col-1">
                 Multiplexed data flow
-            </b-col>
-            <b-col cols="11">
+            </div>
+            <div class="col-11">
                 <div :id="id_data" style="width: 100%;">
                 </div>
-            </b-col>
-        </b-row>
-        <b-row v-if="showbyteranges" style="height: 520px; width: 100%; margin-bottom: 10px;" align-v="center">
-        <!-- <b-row v-if="showbyteranges" style="height: 10020px;" align-v="center"> -->
-            <b-col cols="1">
+            </div>
+        </div>
+        <div v-if="showbyteranges" class="row align-items-center" style="height: 520px; width: 100%; margin-bottom: 10px;">
+        <!-- Full-height debug layout intentionally omitted. -->
+            <div class="col-1">
                 Byterange per STREAM frame
-            </b-col>
-            <b-col cols="11">
+            </div>
+            <div class="col-11">
                 <div :id="id_byterange" style="width: 100%;">
                 </div>
-            </b-col>
-        </b-row>
-    </b-container>
+            </div>
+        </div>
+    </div>
 </template>
 
 <script lang="ts">
-    import { Component, Vue, Prop, Watch } from "vue-property-decorator";
+    import { defineComponent, markRaw, type PropType } from "vue";
     import QlogConnection from "@/data/Connection";
-    import * as qlog from '@/data/QlogSchema';
 
-    import MultiplexingGraphConfig from "./data/MultiplexingGraphConfig";
-    import MultiplexingGraphD3SimulationRenderer from "./renderer/MultiplexingGraphD3SimulationRenderer";
     import MultiplexingGraphD3CollapsedRenderer from "./renderer/MultiplexingGraphD3CollapsedRenderer";
     import MultiplexingGraphD3WaterfallRenderer from "./renderer/MultiplexingGraphD3WaterfallRenderer";
     import ColorHelper from '../shared/helpers/ColorHelper';
 
-    @Component
-    export default class MultiplexingGraphCollapsedRenderer extends Vue {
-        @Prop()
-        public connection!: QlogConnection;
-
-        @Prop()
-        public showwaterfall!: boolean;
-
-        @Prop()
-        public showbyteranges!:boolean;
-
-        protected waterfallRenderer!: MultiplexingGraphD3WaterfallRenderer;
-        // protected fifoRenderer!: MultiplexingGraphD3SimulationRenderer;
-        protected dataRenderer!: MultiplexingGraphD3CollapsedRenderer;
-
-        protected streamDetail:any = null;
-
-        protected skipRender:boolean = false;
-
-        protected get id_waterfall() {
-            // TODO: proper GUID!
-            return this.id_fifo.replace("-fifo-", "-waterfall-");
-        }
-
-        protected get id_fifo() {
-            // TODO: proper GUID!
-            return "multiplexing-fifo-" + Math.round((Math.random() * 100000));
-        }
-
-        protected get id_data() {
-            // TODO: proper GUID!
-            return this.id_fifo.replace("-fifo-", "-data-");
-        }
-
-        protected get id_byterange() {
-            return this.id_fifo.replace("-fifo-", "-byterange-");
-        }
-
-        protected get showstreamdetail() {
-            return this.streamDetail !== null;
-        }
-
-        public created() {
+    export default defineComponent({
+        name: "MultiplexingGraphCollapsedRenderer",
+        props: {
+            connection: {
+                type: Object as PropType<QlogConnection>,
+                required: true,
+            },
+            showwaterfall: {
+                type: Boolean,
+                required: true,
+            },
+            showbyteranges: {
+                type: Boolean,
+                required: true,
+            },
+        },
+        data() {
+            return {
+                id_fifo: `multiplexing-fifo-${Math.round(Math.random() * 100000)}`,
+                waterfallRenderer: undefined as MultiplexingGraphD3WaterfallRenderer | undefined,
+                dataRenderer: undefined as MultiplexingGraphD3CollapsedRenderer | undefined,
+                streamDetail: null as any,
+                skipRender: false,
+            };
+        },
+        computed: {
+            id_waterfall(): string {
+                return this.id_fifo.replace("-fifo-", "-waterfall-");
+            },
+            id_data(): string {
+                return this.id_fifo.replace("-fifo-", "-data-");
+            },
+            id_byterange(): string {
+                return this.id_fifo.replace("-fifo-", "-byterange-");
+            },
+            showstreamdetail(): boolean {
+                return this.streamDetail !== null;
+            },
+        },
+        created() {
 
             // TODO: hook up the .onStreamClicked on the CollapsedRenderer as well
             // didn't do that at first because the needed information wasn't readily available there yet, only in the waterfall
-            this.waterfallRenderer = new MultiplexingGraphD3WaterfallRenderer( this.id_waterfall, (streamDetails:any) => { this.onStreamClicked(streamDetails); } );
+            this.waterfallRenderer = markRaw(new MultiplexingGraphD3WaterfallRenderer( this.id_waterfall, (streamDetails:any) => { this.onStreamClicked(streamDetails); } ));
             // this.fifoRenderer = new MultiplexingGraphD3SimulationRenderer( this.id_fifo );
 
-            this.dataRenderer  = new MultiplexingGraphD3CollapsedRenderer( this.id_data, this.id_byterange );
-        }
+            this.dataRenderer  = markRaw(new MultiplexingGraphD3CollapsedRenderer( this.id_data, this.id_byterange ));
+        },
 
-        public mounted() {
+        mounted() {
             // mainly for when we switch away, and then back to the streamgraph
             this.updateRenderers();
-        }
+        },
 
-        public updated() {
+        updated() {
             this.updateRenderers();
-        }
+        },
+        methods: {
 
-        protected onStreamClicked(streamDetails:any) {
+        onStreamClicked(streamDetails:any) {
             // this updates one part of the viz, but would also trigger an update to the rest
             // this messes with our ByteRangesRenderer, since that's not stateful from VUE perspective yet
             // so, as a dirty hack, skip the next render here... also works for now 
@@ -145,9 +140,9 @@
             this.streamDetail = streamDetails;
 
             this.streamDetail.style = { display: "inline-block", paddingRight: "10px", width: "50px", height: "100%", backgroundColor : ColorHelper.StreamIDToColor( "" + this.streamDetail.stream_id, "HTTP3" )[0] };
-        }
+        },
 
-        protected updateRenderers() {
+        updateRenderers() {
 
             if ( this.skipRender ) {
                 this.skipRender = false;
@@ -176,20 +171,21 @@
                 // if we don't, vue's coupling doesn't happen, even though it's a prop!!
                 // if you remove connection from the rendering, have to add a Watch() statement instead
                 if ( this.connection !== undefined ) {
-                    if ( this.showwaterfall ) {
+                    if ( this.showwaterfall && this.waterfallRenderer && this.dataRenderer ) {
                         this.waterfallRenderer.render ( this.connection );
                         // needed to hook up click handlers
                         // FIXME: this is quite dirty... should probably be done with a general config object
                         this.dataRenderer.waterfallRenderer = this.waterfallRenderer;
                     }
-                    else {
+                    else if ( this.dataRenderer ) {
                         this.dataRenderer.waterfallRenderer = undefined;
                     }
                     // this.fifoRenderer.render( this.connection );
-                    this.dataRenderer.render( this.connection );
+                    this.dataRenderer?.render( this.connection );
                 }
             }, 100 );
-        }
-    }
+        },
+        },
+    });
 
 </script>

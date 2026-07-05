@@ -33,27 +33,19 @@
 </style>
 
 
-<script lang="ts">
-    import { getModule } from "vuex-module-decorators";
-    import { Component, Vue } from "vue-property-decorator";
-    import HelloWorld from "@/components/HelloWorld.vue";
+<script setup lang="ts">
+    import { onMounted } from "vue";
+    import { useRoute } from "vue-router";
 
-    import ConnectionStore from "@/store/ConnectionStore";
-    import ConnectionGroup from "@/data/ConnectionGroup";
+    import { isEmbeddedMode } from "@/embed";
+    import { useConnectionStore } from "@/store/ConnectionStore";
 
-    @Component
-    export default class App extends Vue {
+    const route = useRoute();
+    const store = useConnectionStore();
 
-        protected store:ConnectionStore = getModule(ConnectionStore, this.$store);
-
-        protected created(){ 
-            // this.store.loadFilesFromServer( this.$route.query );
+    onMounted(() => {
+        if ( !isEmbeddedMode() && Object.keys(route.query).length > 0 ){
+            store.loadFilesFromServer( route.query );
         }
-
-        protected mounted(){
-            if ( Object.keys(this.$route.query).length > 0 ){
-                this.store.loadFilesFromServer( this.$route.query );
-            }
-        }
-    }
+    });
 </script>

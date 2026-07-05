@@ -1,12 +1,11 @@
-import Vue from "vue";
-import BootstrapVue from "bootstrap-vue";
-import Notifications from 'vue-notification'
+import { createApp } from "vue";
+import Notifications from "@kyvg/vue3-notification";
 import App from "./App.vue";
+import { initEmbedMode } from "./embed";
 import router from "./router";
-import store from "./store";
+import pinia from "./store";
 
 import "bootstrap/dist/css/bootstrap.css";
-import "bootstrap-vue/dist/bootstrap-vue.css";
 
 // const standaloneFiles:Array<string> = [
 //     "draft-00/example_github.qlog.js",
@@ -21,7 +20,7 @@ import "bootstrap-vue/dist/bootstrap-vue.css";
 //     */
 // ];
 
-// const connectionStore = getModule(ConnectionStore, store);
+// const connectionStore = useConnectionStore();
 
 // for ( const filepath of standaloneFiles ){
 
@@ -65,16 +64,16 @@ import "bootstrap-vue/dist/bootstrap-vue.css";
 // if (window.location.toString().indexOf(":8080") >= 0 && window.location.toString().indexOf("nodemo") < 0 ){
 //     console.log("Autoloading demo files");
 //     setTimeout( () => {
-//         getModule(ConnectionStore, store).loadExamplesForDemo();
+//         useConnectionStore().loadExamplesForDemo();
 //     }, 500);
 // }
 
-Vue.config.productionTip = false;
-Vue.use(BootstrapVue);
-Vue.use(Notifications);
+const app = createApp(App);
 
-new Vue({
-    router,
-    store,
-    render: (h) => h(App),
-}).$mount("#app");
+app.use(router)
+    .use(pinia)
+    .use(Notifications);
+
+initEmbedMode(router);
+
+app.mount("#app");

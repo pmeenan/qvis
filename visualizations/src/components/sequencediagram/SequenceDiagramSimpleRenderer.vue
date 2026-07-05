@@ -1,40 +1,46 @@
 <template>
     <div>
-        <div>ManualRTT: {{config.manualRTT}}</div>
-        <div>Scale: {{config.scale}}</div>
+        <div>Time resolution: {{config.timeResolution}}</div>
 
-        <b-container fluid>
-            <b-row>
-                <b-col v-for="(connection, index) in connections" :key="index">
-                    - {{index}} : {{connection.name}} ( {{connection.parent.description}} )
-                    <div v-for="(event,index) in connection.GetEvents()" :key="index">
-                        = {{index}} : {{connection.parseEvent(event).time}} {{connection.parseEvent(event).category}} {{connection.parseEvent(event).name}} {{connection.parseEvent(event).trigger}} {{(connection.parseEvent(event).data && connection.parseEvent(event).data.header) ? connection.parseEvent(event).data.header.version : ""}}
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col" v-for="(connection, index) in connections" :key="index">
+                    - {{index}} : {{connection.connection.getLongName()}} (offset {{connection.timeOffset}})
+                    <div v-for="(event,eventIndex) in connection.connection.getEvents()" :key="eventIndex">
+                        = {{eventIndex}} : {{connection.connection.parseEvent(event).relativeTime}} {{connection.connection.parseEvent(event).category}} {{connection.connection.parseEvent(event).name}} {{(connection.connection.parseEvent(event).data && connection.connection.parseEvent(event).data.header) ? connection.connection.parseEvent(event).data.header.version : ""}}
                     </div>
-                </b-col>
-            </b-row>
-        </b-container>
+                </div>
+            </div>
+        </div>
     </div>
 </template> 
 
 <script lang="ts">
-    import { Component, Vue, Prop, Watch } from "vue-property-decorator";
+    import { defineComponent, type PropType } from "vue";
     import SequenceDiagramConfig from "./data/SequenceDiagramConfig";
 
-    @Component
-    export default class SequenceDiagramSimpleRenderer extends Vue {
-        @Prop()
-        public config!: SequenceDiagramConfig;
-
-        protected get connections(){
-            return this.config.connections;
-        }
-
-        // Note: we could use .beforeUpdate or use an explicit event or a computed property as well
-        // however, this feels more explicit
-        @Watch('config', { immediate: true, deep: true })
-        protected onConfigChanged(newConfig: SequenceDiagramConfig, oldConfig: SequenceDiagramConfig) {
-            console.log("SequenceDiagramSimpleRenderer:onConfigChanged : ", newConfig, oldConfig);
-        }
-    } 
+    export default defineComponent({
+        name: "SequenceDiagramSimpleRenderer",
+        props: {
+            config: {
+                type: Object as PropType<SequenceDiagramConfig>,
+                required: true,
+            },
+        },
+        computed: {
+            connections() {
+                return this.config.connections;
+            },
+        },
+        watch: {
+            config: {
+                immediate: true,
+                deep: true,
+                handler(newConfig: SequenceDiagramConfig, oldConfig: SequenceDiagramConfig) {
+                    console.log("SequenceDiagramSimpleRenderer:onConfigChanged : ", newConfig, oldConfig);
+                },
+            },
+        },
+    });
 
 </script>

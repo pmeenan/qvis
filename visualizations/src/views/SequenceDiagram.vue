@@ -4,14 +4,6 @@
     </div>
 </template> 
 
-<script lang="ts">
-    import { Component, Vue } from "vue-property-decorator";
+<script setup lang="ts">
     import SequenceDiagramContainer from "@/components/sequencediagram/SequenceDiagramContainer.vue";
-
-    @Component({
-        components: {
-            SequenceDiagramContainer,
-        },
-    })
-    export default class SequenceDiagram extends Vue {} 
 </script>

@@ -1,4 +1,5 @@
 import Connection from "@/data/Connection";
+import { markRaw, toRaw } from "vue";
 
 // we keep track of the timeOffset separately here for two reasons:
 // 1. changing it directly in EventParser wouldn't be reactive by itself, we would have to trigger UI updates another way
@@ -15,9 +16,10 @@ export interface SequenceDiagramConnection {
 export default class SequenceDiagramConfig {
 
     public static createConnectionWithTimeoffset(connection:Connection):SequenceDiagramConnection {
+        const rawConnection = markRaw(toRaw(connection));
         return {
-            connection: connection,
-            timeOffset: connection.getEventParser() ? connection.getEventParser().timeOffset : 0,
+            connection: rawConnection,
+            timeOffset: rawConnection.getEventParser() ? rawConnection.getEventParser().timeOffset : 0,
         }
     }
 

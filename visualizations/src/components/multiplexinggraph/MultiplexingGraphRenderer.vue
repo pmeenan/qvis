@@ -5,25 +5,24 @@
             :connection="connection"
         /> -->
 
-        <b-container fluid>
-            <b-row align-v="center">
-                <b-col cols="6">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col-6">
                     <div id="multiplexing-stats" style="width: 100%;">
 
                     </div>
-                </b-col>
-                <b-col cols="6">
+                </div>
+                <div class="col-6">
                     <div id="multiplexing-stats-streams" style="width: 100%;">
 
                     </div>
-                </b-col>
-            </b-row>
-        </b-container>
+                </div>
+            </div>
+        </div>
 
-        <template v-for="(connection2,index) in this.config.connections">
+        <template v-for="(connection2,index) in config.connections" :key="index">
             <MultiplexingGraphCollapsedRenderer 
                 style="width: 100%; border:5px solid #d1ecf1;"
-                :key="index"
                 :connection="connection2"
                 :showwaterfall="config.showwaterfall"
                 :showbyteranges="config.showbyteranges"
@@ -36,31 +35,35 @@
 </template>
 
 <script lang="ts">
-    import { Component, Vue, Prop, Watch } from "vue-property-decorator";
+    import { defineComponent, type PropType } from "vue";
     import MultiplexingGraphConfig from "./data/MultiplexingGraphConfig";
 
     import MultiplexingGraphCollapsedRenderer from "./MultiplexingGraphCollapsedRenderer.vue";
 
-    @Component({
+    export default defineComponent({
+        name: "MultiplexingGraphRenderer",
         components: {
             MultiplexingGraphCollapsedRenderer,
         },
-    })
-    export default class MultiplexingGraphRenderer extends Vue {
-        @Prop()
-        public config!: MultiplexingGraphConfig;
-
-        protected get connection() {
-            return this.config.connections[0];
-        }
+        props: {
+            config: {
+                type: Object as PropType<MultiplexingGraphConfig>,
+                required: true,
+            },
+        },
+        computed: {
+            connection() {
+                return this.config.connections[0];
+            },
+        },
 
         // protected timelineRenderer!: StreamGraphD3Renderer;
         // protected collapsedRenderer!: StreamGraphD3CollapsedRenderer;
 
-        public created(){
+        created(){
             // this.timelineRenderer = new StreamGraphD3Renderer("stream-graph");
             // this.collapsedRenderer = new StreamGraphD3CollapsedRenderer("stream-graph-collapsed");
-        }
+        },
 
         // public mounted(){
         //     // mainly for when we switch away, and then back to the streamgraph
@@ -82,18 +85,6 @@
         //     }
         // }
 
-        // // Note: we could use .beforeUpdate or use an explicit event or a computed property as well
-        // // however, this feels more explicit
-        // @Watch('config', { immediate: true, deep: true })
-        // protected onConfigChanged(newConfig: StreamGraphConfig, oldConfig: StreamGraphConfig) {
-        //     console.log("StreamGraphRenderer:onConfigChanged : ", newConfig, oldConfig);
-
-        //     if ( this.getRenderer() && newConfig.connections.length > 0 ) {
-        //         // need to timeout, because need to toggle the container with v-show before using it
-        //         // setTimeout( () => { this.getRenderer().render( newConfig.connections[0] ) }, 100 );
-        //     }
-        // }
-
-    }
+    });
 
 </script>

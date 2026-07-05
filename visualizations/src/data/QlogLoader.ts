@@ -8,12 +8,23 @@ import QlogConnection from '@/data/Connection';
 import { IQlogEventParser, IQlogRawEvent, TimeTrackingMethod } from '@/data/QlogEventParser';
 
 import { QlogLoaderV2 } from "./QlogLoaderV2";
+import {
+    hasSpecFinalQlogIdentity,
+    normalizeCategory,
+    normalizeEventData,
+    normalizeEventType,
+    parseReferenceTime,
+} from '@/data/QlogSupport';
 
 export class QlogLoader {
 
     public static fromJSON(json:any) : QlogConnectionGroup | undefined {
 
-        if ( json && json.qlog_version ){
+        if ( json && (json.qlog_version || hasSpecFinalQlogIdentity(json)) ){
+            if (!json.qlog_version && hasSpecFinalQlogIdentity(json)) {
+                return QlogLoaderV2.fromJSON(json);
+            }
+
             const version = json.qlog_version;
             if ( version === "0.1" ){
                 return QlogLoader.fromPreSpec(json);
@@ -30,14 +41,19 @@ export class QlogLoader {
             else if ( qlog02.Defaults.versionAliases.indexOf(version) >= 0 ) {
                 return QlogLoaderV2.fromJSON( json );
             }
+            else if ( hasSpecFinalQlogIdentity(json) ) {
+                // the qlog_version isn't one we recognize, but the file also carries valid
+                // spec-final schema URNs: either identity token suffices, so don't reject it
+                return QlogLoaderV2.fromJSON( json );
+            }
             else {
                 console.error("QlogLoader: Unknown qlog version! Only draft-00, draft-01, draft-02-wip, draft-02 and 0.3 are supported!", version, json);
-                
+
                 return undefined;
             }
         }
         else {
-            console.error("QlogLoader: qlog files MUST have a qlog_version field in their top-level object!", json);
+            console.error("QlogLoader: qlog files MUST have a qlog_version field or spec-final qlog schema URNs!", json);
 
             return undefined;
         }
@@ -138,6 +154,7 @@ export class QlogLoader {
 
                     // draft-02-wip didn't have a few of the non-backwards-compatible changes of the final version
                     QlogLoader.fix02Compatibility(parsedEvt.data);
+                    normalizeEventData(parsedEvt.data);
                 }
 
                 // TODO: remove! Slows down normal traces!
@@ -161,7 +178,9 @@ export class QlogLoader {
                     console.error("QlogLoader:draft02 : manually sorted trace on timestamps!", connection.getEvents());
                     connection.setEventParser( new EventFieldsParser() ); // because startTime etc. could have changes because of the re-ordering
 
-                    alert("Loaded trace was not absolutely ordered on event timestamps. We performed a sort() in qvis, but this slows things down and isn't guaranteed to be stable if the timestamps aren't unique! The qlog spec requires absolutely ordered timestamps. See the console for more details.");
+                    if (typeof alert === "function") {
+                        alert("Loaded trace was not absolutely ordered on event timestamps. We performed a sort() in qvis, but this slows things down and isn't guaranteed to be stable if the timestamps aren't unique! The qlog spec requires absolutely ordered timestamps. See the console for more details.");
+                    }
                 }
             }
         }
@@ -275,6 +294,7 @@ export class QlogLoader {
                     }
 
                     QlogLoader.fix02Compatibility(data);
+                    normalizeEventData(data);
                 }
 
                 // we had a version in between draft-00 and draft-01 that was also using the "draft-01" version...
@@ -348,7 +368,9 @@ export class QlogLoader {
                     console.error("QlogLoader:draft01 : manually sorted trace on timestamps!", connection.getEvents());
                     connection.setEventParser( new EventFieldsParser() ); // because startTime etc. could have changes because of the re-ordering
  
-                    alert("Loaded trace was not absolutely ordered on event timestamps. We performed a sort() in qvis, but this slows things down and isn't guaranteed to be stable if the timestamps aren't unique! The qlog spec requires absolutely ordered timestamps. See the console for more details.");
+                    if (typeof alert === "function") {
+                        alert("Loaded trace was not absolutely ordered on event timestamps. We performed a sort() in qvis, but this slows things down and isn't guaranteed to be stable if the timestamps aren't unique! The qlog spec requires absolutely ordered timestamps. See the console for more details.");
+                    }
                 }
             }
         }
@@ -374,7 +396,7 @@ export class QlogLoader {
 
         // to be compatible with draft-02: data.header.packet_size was moved to data.raw.length
         if ( data && data.header ) {
-            if ( data.header.packet_size ) {
+            if ( Object.prototype.hasOwnProperty.call(data.header, "packet_size") ) {
                 if ( !data.raw ) {
                     data.raw = {};
                 }
@@ -383,7 +405,7 @@ export class QlogLoader {
                 delete data.header.packet_size; // to enforce proper draft-02 structure
             }
 
-            if ( data.header.payload_length ) {
+            if ( Object.prototype.hasOwnProperty.call(data.header, "payload_length") ) {
                 if ( !data.raw ) {
                     data.raw = {};
                 }
@@ -500,7 +522,7 @@ export class QlogLoader {
 
             // to be compatible with draft-02: data.header.packet_size was moved to data.raw.length, data.header.payload_length to data.raw.payload_length
             if ( parsedEvt.data && parsedEvt.data.header ) {
-                if ( parsedEvt.data.header.packet_size ) {
+                if ( Object.prototype.hasOwnProperty.call(parsedEvt.data.header, "packet_size") ) {
                     if ( !parsedEvt.data.raw ) {
                         parsedEvt.data.raw = {};
                     }
@@ -510,7 +532,7 @@ export class QlogLoader {
                 }
 
 
-                if ( parsedEvt.data.header.payload_length ) {
+                if ( Object.prototype.hasOwnProperty.call(parsedEvt.data.header, "payload_length") ) {
                     if ( !parsedEvt.data.raw ) {
                         parsedEvt.data.raw = {};
                     }
@@ -775,14 +797,17 @@ export class EventFieldsParser implements IQlogEventParser {
             return this.categoryCommon;
         }
 
-        return (this.currentEvent as IQlogRawEvent)[this.categoryIndex].toLowerCase();
+        const category = (this.currentEvent as IQlogRawEvent)[this.categoryIndex];
+        const name = this.nameIndex === -1 ? this.nameCommon : (this.currentEvent as IQlogRawEvent)[this.nameIndex];
+        return normalizeCategory(category, name);
     }
     public get name():string {
         if ( this.nameIndex === -1 ) {
             return this.nameCommon;
         }
 
-        return (this.currentEvent as IQlogRawEvent)[this.nameIndex].toLowerCase();
+        const category = this.categoryIndex === -1 ? this.categoryCommon : (this.currentEvent as IQlogRawEvent)[this.categoryIndex];
+        return normalizeEventType(category, (this.currentEvent as IQlogRawEvent)[this.nameIndex]);
     }
     public set name(val:string) {
         if ( this.nameIndex === -1 ) {
@@ -811,13 +836,13 @@ export class EventFieldsParser implements IQlogEventParser {
         this.currentEvent = undefined;
 
         if (trace.commonFields ){
+            const rawCategoryCommon = trace.commonFields.category || trace.commonFields.CATEGORY;
+            const rawNameCommon = trace.commonFields.event || trace.commonFields.EVENT_TYPE;
             if ( trace.commonFields.category || trace.commonFields.CATEGORY ) {
-                this.categoryCommon = trace.commonFields.category || trace.commonFields.CATEGORY;
-                this.categoryCommon = this.categoryCommon.toLowerCase();
+                this.categoryCommon = normalizeCategory(rawCategoryCommon, rawNameCommon);
             }
             if ( trace.commonFields.event || trace.commonFields.EVENT_TYPE ) {
-                this.nameCommon = trace.commonFields.event || trace.commonFields.EVENT_TYPE;
-                this.nameCommon = this.nameCommon.toLowerCase();
+                this.nameCommon = normalizeEventType(rawCategoryCommon, rawNameCommon);
             }
         }
 
@@ -870,6 +895,7 @@ export class EventFieldsParser implements IQlogEventParser {
 
                     const allEvents = trace.getEvents()
                     if ( !allEvents || allEvents.length === 0 ) {
+                        // no events: nothing to transform, log and degrade gracefully
                         console.error("QlogLoader: DELTA_TIME requires all events to be set before setEventParser is called... was not the case here!");
                     }
                     else {
@@ -877,24 +903,24 @@ export class EventFieldsParser implements IQlogEventParser {
                         if ( trace.commonFields && trace.commonFields.reference_time !== undefined ){
                             this.addTime = 0;
                             this.subtractTime = this.parseReferenceTime( trace.commonFields.reference_time, this.timeMultiplier );
-                            allEvents[0][this.timeIndex] += this.subtractTime; // so we can start from event 1 below
-                            // note: it's not just = this.subtractTime: the ref_time could be set when the process starts and stay the same for many connections that start later 
+                            allEvents[0][this.timeIndex] = parseFloat(allEvents[0][this.timeIndex]) + this.subtractTime; // so we can start from event 1 below
+                            // note: it's not just = this.subtractTime: the ref_time could be set when the process starts and stay the same for many connections that start later
                             // put differently: first timestamp isn't always 0
                         }
                         else {
                             this.addTime = 0;
                             this.subtractTime = parseFloat( allEvents[0][this.timeIndex] );
                         }
-                    }
 
-                    // transform the timestamps into absolute timestamps starting from the initial time found above
-                    // e.g., initial time is 1500, then we have 3, 5, 7
-                    // then the total timestamps should be 1500, 1503, 1508, 1515
-                    let previousTime = this.subtractTime;
-                    for ( let i = 1; i < allEvents.length; ++i  ) { // start at 1, because the first event can be special, see above
-                        // console.log("Starting at ", allEvents[i][ this.timeIndex ], "+", previousTime, " gives ", parseFloat(allEvents[i][ this.timeIndex ]) + previousTime);
-                        allEvents[i][ this.timeIndex ] = parseFloat(allEvents[i][ this.timeIndex ]) + previousTime;
-                        previousTime = allEvents[i][ this.timeIndex ];
+                        // transform the timestamps into absolute timestamps starting from the initial time found above
+                        // e.g., initial time is 1500, then we have 3, 5, 7
+                        // then the total timestamps should be 1500, 1503, 1508, 1515
+                        let previousTime = parseFloat(allEvents[0][this.timeIndex]);
+                        for ( let i = 1; i < allEvents.length; ++i  ) { // start at 1, because the first event can be special, see above
+                            // console.log("Starting at ", allEvents[i][ this.timeIndex ], "+", previousTime, " gives ", parseFloat(allEvents[i][ this.timeIndex ]) + previousTime);
+                            allEvents[i][ this.timeIndex ] = parseFloat(allEvents[i][ this.timeIndex ]) + previousTime;
+                            previousTime = allEvents[i][ this.timeIndex ];
+                        }
                     }
                 }
             }
@@ -941,7 +967,7 @@ export class EventFieldsParser implements IQlogEventParser {
         return this;
     }
 
-    protected parseReferenceTime(refTimeIn:string, multiplier:number) : number {
+    protected parseReferenceTime(refTimeIn:string | number | Record<string, unknown>, multiplier:number) : number {
         // normally, we expect reference time to be in milliseconds or microseconds since the unix epoch
         // in this case, parseFloat() gives us the value we need and we later adjust it to milliseconds
         // however, we also want to support time strings like "2020-08-16T20:53:56.582164977+00:00"
@@ -962,7 +988,7 @@ export class EventFieldsParser implements IQlogEventParser {
                 }
         }
 
-        return parseFloat( refTimeIn );
+        return parseReferenceTime(refTimeIn, multiplier);
     }
 }
 
@@ -984,10 +1010,10 @@ export class PreSpecEventParser implements IQlogEventParser {
     }
 
     public get category():string {
-        return (this.currentEvent as IQlogRawEvent)[1];
+        return normalizeCategory( (this.currentEvent as IQlogRawEvent)[1], (this.currentEvent as IQlogRawEvent)[2] );
     }
     public get name():string {
-        return (this.currentEvent as IQlogRawEvent)[2];
+        return normalizeEventType( (this.currentEvent as IQlogRawEvent)[1], (this.currentEvent as IQlogRawEvent)[2] );
     }
     public set name(val:string) {
         (this.currentEvent as IQlogRawEvent)[2] = val;

@@ -5,28 +5,12 @@
     </div>
 </template> 
 
-<script lang="ts">
-    import { getModule } from "vuex-module-decorators";
-    import { Component, Vue } from "vue-property-decorator";
-
-    import PacketizationDiagramConfig from "./data/PacketizationDiagramConfig"; 
+<script setup lang="ts">
     import PacketizationDiagramConfigurator from "./PacketizationDiagramConfigurator.vue";
     import PacketizationDiagramRenderer from "./PacketizationDiagramRenderer.vue"; 
 
-    import ConfigurationStore from "@/store/ConfigurationStore";
-    import ConnectionGroup from "@/data/ConnectionGroup";
+    import { useConfigurationStore } from "@/store/ConfigurationStore";
 
-
-    @Component({
-        components: {
-            PacketizationDiagramConfigurator,
-            PacketizationDiagramRenderer,
-        },
-    })
-
-    export default class PacketizationDiagramContainer extends Vue {
-
-        protected store:ConfigurationStore = getModule(ConfigurationStore, this.$store);
-        protected config:PacketizationDiagramConfig = this.store.packetizationDiagramConfig;
-    } 
+    const store = useConfigurationStore();
+    const config = store.packetizationDiagramConfig;
 </script>

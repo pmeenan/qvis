@@ -20,8 +20,11 @@ export enum LogFormat {
 }
 
 export interface IQLog {
-    qlog_version: string,
+    qlog_version?: string,
     qlog_format?: LogFormat,
+    file_schema?: string,
+    serialization_format?: LogFormat | string,
+    event_schemas?: Array<string>,
 
     title?:string,
     description?: string,
@@ -41,6 +44,7 @@ export interface ITrace {
     vantage_point: IVantagePoint,
     title?:string,
     description?: string,
+    event_schemas?: Array<string>,
 
     configuration?: IConfiguration,
 
@@ -88,13 +92,15 @@ export enum TimeFormat {
     absolute = "absolute",
     relative = "relative",
     delta = "delta",
+    relative_to_epoch = "relative_to_epoch",
+    relative_to_previous_event = "relative_to_previous_event",
 }
 
 export interface ICommonFields {
     group_id?: string | Array<any>,
     protocol_type?: string,
 
-    reference_time?:string,
+    reference_time?:string | number | Record<string, unknown>,
 
     time_format?:TimeFormat,
 
@@ -135,9 +141,11 @@ export interface IRawInfo {
 export enum EventCategory {
     connectivity = "connectivity",
     security = "security",
-    transport = "transport",
+    quic = "quic",
+    transport = "quic",
     recovery = "recovery",
-    http = "http",
+    http3 = "http3",
+    http = "http3",
     qpack = "qpack",
 
     error = "error",
@@ -158,6 +166,8 @@ export enum ConnectivityEventType {
 
 export enum TransportEventType {
     parameters_set = "parameters_set",
+    alpn_information = "alpn_information",
+    version_information = "version_information",
 
     datagrams_sent = "datagrams_sent",
     datagrams_received = "datagrams_received",
@@ -171,6 +181,10 @@ export enum TransportEventType {
     frames_processed = "frames_processed",
 
     stream_state_updated = "stream_state_updated",
+    stream_data_moved = "stream_data_moved",
+    recovery_metrics_updated = "recovery_metrics_updated",
+    congestion_state_updated = "congestion_state_updated",
+    connection_closed = "connection_closed",
 }
 
 export enum SecurityEventType {
@@ -179,8 +193,10 @@ export enum SecurityEventType {
 }
 
 export enum RecoveryEventType {
-    parameters_set = "parameters_set",
-    metrics_updated = "metrics_updated",
+    parameters_set = "recovery_parameters_set",
+    legacy_parameters_set = "parameters_set",
+    metrics_updated = "recovery_metrics_updated",
+    legacy_metrics_updated = "metrics_updated",
     congestion_state_updated = "congestion_state_updated",
 
     loss_timer_set = "loss_timer_set",

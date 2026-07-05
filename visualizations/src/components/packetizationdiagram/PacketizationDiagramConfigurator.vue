@@ -1,40 +1,34 @@
 <template>
     <div style="background-color: #f8d7da; padding: 0px 10px;" >
 
-        <b-container fluid>
-            <b-row align-h="center">
+        <div class="container-fluid">
+            <div class="row justify-content-center">
                 <p  style="margin-top: 10px;">Select a trace via the dropdown(s) below to visualize it in the packetization diagram</p>
-            </b-row>
-            <b-row align-h="center">
+            </div>
+            <div class="row justify-content-center">
                 <ConnectionConfigurator v-if="config.connections.length > 0" :allGroups="store.groups" :connection="config.connections[0]" :canBeRemoved="false" :onConnectionSelected="onConnectionSelected" />
-            </b-row>
+            </div>
 
-            <!-- <b-row align-h="center">
-                <b-form-checkbox
-                    id="collapsed-checkbox"
-                    v-model="config.collapsed"
-                    name="collapsed-checkbox"
-                    class="mr-3"
-                >
-                    Show collapsed
-                </b-form-checkbox>
-
-                <b-button class="ml-3" v-if="allowSelectAll" @click="selectAllConnections()" :disabled="config.connections.length === 0" variant="primary">Load all connections at once</b-button>
-            </b-row> -->
-
-            <b-row align-h="center">
-                <b-col cols="8" class="text-center">
+            <div class="row justify-content-center">
+                <div class="col-8 text-center">
                     <div  class="text-center">
-                        <b-button class="m-auto" style="width: 25%;" block @click="toggleInfo">More info on this tool</b-button>
+                        <button type="button" class="btn btn-secondary m-auto d-block" style="width: 25%;" @click="toggleInfo">More info on this tool</button>
                     </div>
-                </b-col>
-            </b-row>
+                </div>
+            </div>
 
-            <b-alert v-if="this.store.outstandingRequestCount === 0 && this.store.groups.length === 0" show variant="danger">Please load a trace file to visualize it</b-alert>
-            <b-alert v-else-if="this.store.groups.length === 0" show variant="warning">Loading files...</b-alert>
+            <div v-if="store.outstandingRequestCount === 0 && store.groups.length === 0" class="alert alert-danger" role="alert">Please load a trace file to visualize it</div>
+            <div v-else-if="store.groups.length === 0" class="alert alert-warning" role="alert">Loading files...</div>
 
-            <b-modal id="info-modal" size="xl" hide-footer title="PacketizationDiagram info">
-                <h2>How to test?</h2>
+            <div v-if="infoShown" id="info-modal" class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true" @click.self="toggleInfo">
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">PacketizationDiagram info</h5>
+                            <button type="button" class="btn-close" aria-label="Close" @click="toggleInfo"></button>
+                        </div>
+                        <div class="modal-body">
+                            <h2>How to test?</h2>
                     Load the predefined DEMO files (using the "manage files" tab above) and then select the "<b>DEMO_10_parallel_streams</b>" file here (the other demo files are a bit flaky on this visualization because they're older and don't always contain all the necessary fields)<br />
 
                     You can also upload your own qlog files, but note that this has been tested mainly on client-side traces. Server-side logs should work, but there might be dragons. Let us know if you find any bugs.
@@ -89,10 +83,16 @@
                     See the qvis repository for a demo TCP file. 
                 </p>
 
-                <b-button class="mt-3 d-block" @click="toggleInfo">Close</b-button>
-            </b-modal>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary mt-3 d-block" @click="toggleInfo">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div v-if="infoShown" class="modal-backdrop fade show"></div>
 
-        </b-container>
+        </div>
 
     </div>
 </template>
@@ -108,41 +108,53 @@
 </style>
 
 <script lang="ts">
-    import { getModule } from "vuex-module-decorators";
-    import { Component, Vue, Prop } from "vue-property-decorator";
+    import { defineComponent, markRaw, toRaw, type PropType } from "vue";
     import PacketizationDiagramConfig from "./data/PacketizationDiagramConfig";
-    import * as qlog from '@/data/QlogSchema';
 
     import ConnectionConfigurator from "@/components/shared/ConnectionConfigurator.vue";
-    import ConnectionStore from "@/store/ConnectionStore";
-    import ConnectionGroup from "@/data/ConnectionGroup";
+    import { useConnectionStore } from "@/store/ConnectionStore";
     import Connection from "@/data/Connection";
-    import QlogConnection from '@/data/Connection';
 
-    @Component({
+    export default defineComponent({
+        name: "PacketizationDiagramConfigurator",
         components: {
             ConnectionConfigurator,
         },
-    })
-    export default class PacketizationDiagramConfigurator extends Vue {
-        @Prop()
-        public config!: PacketizationDiagramConfig;
-
-        public store:ConnectionStore = getModule(ConnectionStore, this.$store);
-
-        protected infoShown:boolean = false;
-
-        public onConnectionSelected(connection:Connection) {
+        props: {
+            config: {
+                type: Object as PropType<PacketizationDiagramConfig>,
+                required: true,
+            },
+        },
+        data() {
+            return {
+                store: useConnectionStore(),
+                infoShown: false,
+            };
+        },
+        computed: {
+            allowSelectAll(): boolean {
+                return (window.location.toString().indexOf(":8080") >= 0 ); // only for local testing for now! // TODO: CLEAN UP
+            },
+        },
+        mounted() {
+            if ( this.config.connections.length === 0 && this.store.groups.length > 0 ){
+                this.selectDefault();
+            }
+        },
+        updated() {
+            if ( this.config.connections.length === 0 && this.store.groups.length > 0 ){
+                this.selectDefault();
+            }
+        },
+        methods: {
+        onConnectionSelected(connection:Connection) {
             console.log("PacketizationDiagramConfigurator:onConnectionSelected : ", this.config, connection);
 
-            this.config.connections = [ connection ];
-        }
+            this.config.connections = [ markRaw(toRaw(connection)) ];
+        },
 
-        public get allowSelectAll() : boolean {
-            return (window.location.toString().indexOf(":8080") >= 0 ); // only for local testing for now! // TODO: CLEAN UP
-        }
-
-        public selectAllConnections() {
+        selectAllConnections() {
 
             // TODO: just for paper results, remove!
             (window as any).holblockinfo = new Array<any>();
@@ -150,40 +162,22 @@
             const conns = [];
             for ( const group of this.store.groups ){
                 if ( group.filename.indexOf("DEMO") < 0 ){
-                    conns.push( ...group.getConnections() );
+                    conns.push( ...group.getConnections().map((connection) => markRaw(toRaw(connection))) );
                 }
             }
 
             this.config.connections = conns;
-        }
+        },
 
-        public mounted(){
-            if ( this.config.connections.length === 0 && this.store.groups.length > 0 ){
-                this.selectDefault();
-            }
-        }
-
-        public updated(){
-            if ( this.config.connections.length === 0 && this.store.groups.length > 0 ){
-                this.selectDefault();
-            }
-        }
-
-        protected selectDefault(){
+        selectDefault(){
             console.log("PacketizationDiagramConfigurator:selectDefault: adding new default connection configurator", this.store.groups);
-            this.config.connections = [ this.store.groups[0].getConnections()[0] ];
-        }
+            this.config.connections = [ markRaw(toRaw(this.store.groups[0].getConnections()[0])) ];
+        },
 
-        protected toggleInfo() {
-            if ( !this.infoShown) {
-                this.$bvModal.show("info-modal");
-            }
-            else {
-                this.$bvModal.hide("info-modal");
-            }
-
+        toggleInfo() {
             this.infoShown = !this.infoShown;
-        }
-    }
+        },
+        },
+    });
 
 </script>

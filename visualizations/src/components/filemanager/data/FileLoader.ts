@@ -212,17 +212,22 @@ export default class FileLoader {
         // depending on the file type, we expect to find different things in the file "header"
 
         // .qlog file 
-        if ( firstFewCharacters.indexOf("qlog_version") >= 0 ) {
+        if ( firstFewCharacters.indexOf("qlog_version") >= 0 || firstFewCharacters.indexOf("urn:ietf:params:qlog") >= 0 ) {
             // two main options:
             // either it's a normal JSON file, or a newline-delimited JSON file
-            if ( firstFewCharacters.indexOf("qlog_format") >= 0 ) {
-                if ( firstFewCharacters.indexOf("NDJSON") >= 0 ) {
-                    return FileType.qlog_newline;
-                }
-                else if( firstFewCharacters.indexOf("JSON-SEQ") >= 0 ) {
+            if ( firstFewCharacters.indexOf("qlog_format") >= 0 || firstFewCharacters.indexOf("serialization_format") >= 0 ) {
+                // draft-era files spell the format "JSON-SEQ" / "NDJSON" / "JSON", but the RFC's
+                // canonical serialization_format values are lowercase media types
+                // (application/qlog+json-seq, application/qlog+json): match case-insensitively
+                const lowercased = firstFewCharacters.toLowerCase();
+
+                if ( lowercased.indexOf("json-seq") >= 0 ) {
                     return FileType.qlog_textsequence;
                 }
-                else if ( firstFewCharacters.indexOf("JSON") >= 0 ) {
+                else if ( lowercased.indexOf("ndjson") >= 0 ) {
+                    return FileType.qlog_newline;
+                }
+                else if ( lowercased.indexOf("json") >= 0 ) {
                     return FileType.qlog_normal;
                 }
             }
@@ -248,66 +253,13 @@ export default class FileLoader {
     }
 
     // wrapper function mainly to provide a Promisified-interface
-    protected LoadFirstFewCharacters( file:File ) : Promise<string> {
-        
-        let resolver:any = undefined;
-        let rejecter:any = undefined;
-
-        const output = new Promise<string>( (resolve, reject) => {
-            resolver = resolve;
-            rejecter = reject;
-        });
-
-        const identifier = new FileReader();
-
+    protected async LoadFirstFewCharacters( file:File ) : Promise<string> {
         const firstFewBytes = file.slice(0, 1024); // first 1000 bytes should contain qlog_version
-
-        identifier.onload = (evt) => { 
-            const firstFewCharacters = (evt!.target as any).result;
-
-            resolver( firstFewCharacters );
-        };
-
-        identifier.onabort = (evt) => { 
-            rejecter("File loading aborted: " + file.name + " : " + JSON.stringify(evt) );
-        }
-
-        identifier.onerror = (evt) => { 
-            rejecter("File loading error: " + file.name + " : " + JSON.stringify(evt) );
-        }
-
-        identifier.readAsText(firstFewBytes);
-
-        return output;
+        return await firstFewBytes.text();
     }
 
     // wrapper function mainly to provide a Promisified-interface
-    protected LoadFileAsText( file:File ) : Promise<string> {
-        
-        let resolver:any = undefined;
-        let rejecter:any = undefined;
-
-        const output = new Promise<string>( (resolve, reject) => {
-            resolver = resolve;
-            rejecter = reject;
-        });
-        
-        const reader = new FileReader();
-
-        reader.onload = (evt) => {
-            resolver( (evt!.target as any).result );
-        };
-
-        reader.onabort = (evt) => { 
-            rejecter("File loading aborted: " + file.name + " : " + JSON.stringify(evt) );
-        };
-
-        reader.onerror = (evt) => { 
-            rejecter("File loading error: " + file.name + " : " + JSON.stringify(evt) );
-        };
-
-        reader.readAsText(file);
-
-        return output;
+    protected async LoadFileAsText( file:File ) : Promise<string> {
+        return await file.text();
     }
 }

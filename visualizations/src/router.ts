@@ -1,5 +1,4 @@
-import Vue from "vue";
-import Router from "vue-router";
+import { createRouter, createWebHashHistory } from "vue-router";
 import MainMenu from "./views/MainMenu.vue";
 import VUEDebug from "./views/VUEDebug.vue";
 import FileManager from "./views/FileManager.vue";
@@ -8,14 +7,14 @@ import PacketizationDiagram from "./views/PacketizationDiagram.vue";
 import CongestionGraph from "./views/CongestionGraph.vue";
 import MultiplexingGraph from "./views/MultiplexingGraph.vue";
 import Statistics from "./views/Statistics.vue";
+import { isEmbeddedMode } from "./embed";
 
-Vue.use(Router);
-
-const router = new Router({
+const router = createRouter({
+    history: createWebHashHistory(import.meta.env.BASE_URL),
     routes: [
         {
             path: "/",
-            redirect: "/files",
+            redirect: () => isEmbeddedMode() ? "/sequence" : "/files",
         },
         {
             path: "/debug",
@@ -84,7 +83,7 @@ const router = new Router({
     ],
 });
 
-function hasQueryParams(route:any) {
+function hasQueryParams(route: any) {
     return !!Object.keys(route.query).length;
   }
 
@@ -99,7 +98,15 @@ function hasQueryParams(route:any) {
 // and use them in the redirect so stuff works
 router.beforeEach((to, from, next) => {
 
-    if ( window.location.search && Object.keys(to.query).length === 0 && from.path === "/" ){
+    if ( isEmbeddedMode() ) {
+        if (to.path === "/files") {
+            next({ path: "/sequence", query: to.query });
+        }
+        else {
+            next();
+        }
+    }
+    else if ( window.location.search && Object.keys(to.query).length === 0 && from.path === "/" ){
         const params = new URLSearchParams(window.location.search);
         const query:any = {};
         for ( const entry of params.entries() ){

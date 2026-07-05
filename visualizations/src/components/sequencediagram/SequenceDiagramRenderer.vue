@@ -8,17 +8,30 @@
                 
             </svg>
         </div>
-        <b-modal id="event-modal" hide-footer title="Event detail">
-            <div v-if="this.eventLink !== null">
-                <a :href="this.eventLink" target="_blank">Direct link to this event</a><br/>
-                <hr>
+        <div v-if="eventModalShown" id="event-modal" class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true" @click.self="hideEventModal">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Event detail</h5>
+                        <button type="button" class="btn-close" aria-label="Close" @click="hideEventModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div v-if="eventLink !== null">
+                            <a :href="eventLink" target="_blank">Direct link to this event</a><br/>
+                            <hr>
+                        </div>
+                        <pre class="d-block">{{ eventDetail }}</pre>
+                        <!-- TODO: make this configurable: not all extra data will be recovery-metric related down the line! -->
+                        <p style="font-weight: bold;" v-if="eventDetailExtra !== null">Value of all recovery metrics at this point:</p>
+                        <pre v-if="eventDetailExtra !== null" class="d-block">{{ eventDetailExtra }}</pre>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary mt-3" @click="hideEventModal">Close</button>
+                    </div>
+                </div>
             </div>
-            <pre class="d-block">{{ eventDetail }}</pre>
-            <!-- TODO: make this configurable: not all extra data will be recovery-metric related down the line! -->
-            <p style="font-weight: bold;" v-if="this.eventDetailExtra !== null">Value of all recovery metrics at this point:</p>
-            <pre v-if="this.eventDetailExtra !== null" class="d-block">{{ eventDetailExtra }}</pre>
-            <b-button class="mt-3" block @click="hideEventModal">Close</b-button>
-        </b-modal>
+        </div>
+        <div v-if="eventModalShown" class="modal-backdrop fade show"></div>
     </div>
 </template> 
 
@@ -29,33 +42,39 @@
 </style> 
 
 <script lang="ts">
-    import { Component, Vue, Prop, Watch } from "vue-property-decorator";
+    import { defineComponent, markRaw, type PropType } from "vue";
+    import { notify } from "@kyvg/vue3-notification";
     import SequenceDiagramConfig from "./data/SequenceDiagramConfig";
     import { SequenceDiagramD3Renderer, EventPointer } from "./renderer/SequenceDiagramD3Renderer";
-    import SequenceDiagramCanvasRenderer from "./renderer/SequenceDiagramCanvasRenderer";
 
-    @Component
-    export default class SequenceDiagramRenderer extends Vue {
-        @Prop()
-        public config!: SequenceDiagramConfig;
-
-        public eventDetail: string = '';
-        public eventDetailExtra: string|null = null; // not undefined, because that would make this propery un-reactive
-        public eventLink: string|null = null;
-
-        protected focusOnNext:EventPointer|null = null;
-
-        protected get connections(){
-            return this.config.connections;
-        }
-
-        protected renderer: SequenceDiagramD3Renderer | undefined = undefined;
-
-        public created(){
-            this.renderer = new SequenceDiagramD3Renderer("sequence-diagram", "sequence-diagram-svg", this.showEventModal);
+    export default defineComponent({
+        name: "SequenceDiagramRenderer",
+        props: {
+            config: {
+                type: Object as PropType<SequenceDiagramConfig>,
+                required: true,
+            },
+        },
+        data() {
+            return {
+                eventDetail: "",
+                eventDetailExtra: null as string | null,
+                eventLink: null as string | null,
+                eventModalShown: false,
+                focusOnNext: null as EventPointer | null,
+                renderer: undefined as SequenceDiagramD3Renderer | undefined,
+            };
+        },
+        computed: {
+            connections() {
+                return this.config.connections;
+            },
+        },
+        created() {
+            this.renderer = markRaw(new SequenceDiagramD3Renderer("sequence-diagram", "sequence-diagram-svg", this.showEventModal));
             // this.renderer = new SequenceDiagramCanvasRenderer("sequence-diagram");
 
-            const queryParameters = this.$route.query; // TODO: move this to a Helper if other visualizations start using this
+            const queryParameters = Object.fromEntries(new URLSearchParams((window.location.hash.split("?")[1] || "").split("#")[0]));
 
             if ( queryParameters.focusOnConnection && queryParameters.focusOnEvent ) {
                 this.focusOnNext = { connectionIndex: parseInt(queryParameters.focusOnConnection as string, 10), eventIndex: parseInt(queryParameters.focusOnEvent as string, 10) };
@@ -69,20 +88,21 @@
 
                 this.focusOnNext = { connectionIndex: connectionIndex, packetNumber: parseInt(queryParameters.focusOnPN as string, 10) };
             }
-        }
+        },
 
-        public mounted(){
+        mounted() {
             // mainly for when we switch away, and then back to the sequenceDiagram
             if ( this.config && this.renderer && this.config.connections.length > 0 ) {
                 this.renderer.render( this.config.connections, this.config.timeResolution );
             }
-        }
+        },
+        methods: {
 
-        protected hideEventModal() {
-            this.$bvModal.hide("event-modal");
-        }
+        hideEventModal() {
+            this.eventModalShown = false;
+        },
 
-        protected showEventModal(event: any, extra: any) {
+        showEventModal(event: any, extra: any) {
 
             this.eventDetail = JSON.stringify(event, null, 2);
             if ( extra !== undefined ) {
@@ -146,51 +166,53 @@
                 this.eventDetail = "Event nr: " + eventNr + "\n" + this.eventDetail;
             }
             
-            this.$bvModal.show("event-modal");
-        }
+            this.eventModalShown = true;
+        },
+        },
+        watch: {
+            config: {
+                immediate: true,
+                deep: true,
+                async handler(newConfig: SequenceDiagramConfig, oldConfig: SequenceDiagramConfig) {
+                    console.log("SequenceDiagramRenderer:onConfigChanged : ", newConfig, oldConfig);
 
-        // Note: we could use .beforeUpdate or use an explicit event or a computed property as well
-        // however, this feels more explicit
-        @Watch('config', { immediate: true, deep: true })
-        protected async onConfigChanged(newConfig: SequenceDiagramConfig, oldConfig: SequenceDiagramConfig) {
-            console.log("SequenceDiagramRenderer:onConfigChanged : ", newConfig, oldConfig);
+                    if ( this.renderer ) {
 
-            if ( this.renderer ) {
+                        // Because of the Vue reactivity, we come into this function multiple times but we just want to do the first
+                        // so the .rendering var helps deal with that
+                        // TODO: fix this OR bring this logic into this component, rather than on the renderer
+                        if ( !this.renderer.rendering ){
 
-                // Because of the Vue reactivity, we come into this function multiple times but we just want to do the first
-                // so the .rendering var helps deal with that
-                // TODO: fix this OR bring this logic into this component, rather than on the renderer
-                if ( !this.renderer.rendering ){
+                            if ( newConfig.connections && newConfig.connections[0]?.connection.getEvents().length > 10000 ){
+                                notify({
+                                    group: "default",
+                                    title: "Trace might take long to render",
+                                    type: "warn",
+                                    text: "Some large traces can take a long time to render. Please be patient.",
+                                });
 
-                    if ( newConfig.connections && newConfig.connections[0].connection.getEvents().length > 10000 ){
-                        Vue.notify({
-                            group: "default",
-                            title: "Trace might take long to render",
-                            type: "warn",
-                            text: "Some large traces can take a long time to render. Please be patient.",
-                        });
+                                // give time to show the warning
+                                await new Promise( (resolve) => setTimeout(resolve, 200));
+                            }
 
-                        // give time to show the warning
-                        await new Promise( (resolve) => setTimeout(resolve, 200));
-                    }
-
-                    this.renderer.render( newConfig.connections, newConfig.timeResolution, this.focusOnNext ).then( (rendered) => {
-                        
-                        this.focusOnNext = null; // don't want to keep focusing on the same thing if we've changed selection
-                        
-                        if ( !rendered ) {
-                            Vue.notify({
-                                group: "default",
-                                title: "Trace could not be rendered",
-                                type: "error",
-                                text: "This trace could not be rendered. There could be an error or a previous file was still rendering.<br/>See the JavaScript devtools for more information.",
+                            this.renderer.render( newConfig.connections, newConfig.timeResolution, this.focusOnNext ).then( (rendered) => {
+                                
+                                this.focusOnNext = null; // don't want to keep focusing on the same thing if we've changed selection
+                                
+                                if ( !rendered ) {
+                                    notify({
+                                        group: "default",
+                                        title: "Trace could not be rendered",
+                                        type: "error",
+                                        text: "This trace could not be rendered. There could be an error or a previous file was still rendering.<br/>See the JavaScript devtools for more information.",
+                                    });
+                                }
                             });
                         }
-                    });
-                }
-            }
-        }
-
-    } 
+                    }
+                },
+            },
+        },
+    });
 
 </script>

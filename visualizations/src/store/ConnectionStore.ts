@@ -1,120 +1,115 @@
-import {VuexModule, Module, Mutation, Action} from 'vuex-module-decorators';
-import { Module as Modx } from 'vuex';
+import { defineStore } from "pinia";
+import { markRaw } from "vue";
+import { notify } from "@kyvg/vue3-notification";
 import axios, {AxiosResponse} from "axios";
 import QlogConnectionGroup from "@/data/ConnectionGroup";
 import QlogConnection from '@/data/Connection';
 import { QlogLoader, PreSpecEventParser } from '@/data/QlogLoader';
-import { IQlogRawEvent } from '@/data/QlogEventParser';
-import Vue from 'vue';
+import { hasSpecFinalQlogIdentity } from '@/data/QlogSupport';
 import TCPToQlog from '@/components/filemanager/pcapconverter/tcptoqlog';
 import StreamingJSONParser from '@/components/filemanager/utils/StreamingJSONParser';
 import FileLoader from '@/components/filemanager/data/FileLoader';
 import NetlogToQlog from '@/components/filemanager/netlogconverter/netlogtoqlog';
 
-@Module({name: 'connections'})
-export default class ConnectionStore extends VuexModule {
+export const useConnectionStore = defineStore("connections", {
+    state: () => ({
+        grouplist: new Array<QlogConnectionGroup>(),
+        outstandingRequests: 0,
+        embeddedMode: false,
+    }),
+    getters: {
+        groups: (state): Array<QlogConnectionGroup> => state.grouplist as unknown as Array<QlogConnectionGroup>,
+        outstandingRequestCount: (state): number => state.outstandingRequests,
+    },
+    actions: {
+        adjustOutstandingRequestCount(amount:number) {
+            this.outstandingRequests += amount;
+        },
 
-    // WARNING : do not use an _ to prefix a variable, this doesn't play well with Vue(x) internals!
-    protected grouplist:Array<QlogConnectionGroup> = new Array<QlogConnectionGroup>();
-    protected outstandingRequests:number = 0;
+        addGroup(group:QlogConnectionGroup) {
+            console.log("ConnectionStore Mutation for adding group", group);
+            this.grouplist.push(markRaw(group));
+        },
 
-    public constructor(moduler: Modx<ThisType<{}>, any>){
-        super(moduler); 
-    }
+        deleteGroup(group:QlogConnectionGroup) {
+            const index = this.grouplist.indexOf(group);
 
-    get groups(): Array<QlogConnectionGroup> {
-        return this.grouplist;
-    }
+            if ( index !== -1 ) {
+                this.grouplist.splice(index, 1);
+            }
+        },
 
-    get outstandingRequestCount(): number {
-        return this.outstandingRequests;
-    }
+        removeGroup(group:QlogConnectionGroup) {
+            this.deleteGroup(group);
+        },
 
-    @Mutation
-    public adjustOutstandingRequestCount(amount:number) {
-        this.outstandingRequests += amount;
-    }
+        setEmbeddedMode(enabled:boolean) {
+            this.embeddedMode = enabled;
+        },
 
-    @Mutation
-    public addGroup(group:QlogConnectionGroup) {
-        console.log("ConnectionStore Mutation for adding group", group);
-        this.grouplist.push(group);
-    }
+        shouldUseBackendFallback() {
+            // The 14c embed shim can disable this before loading files so embedded qvis never posts to /loadfiles.
+            return !this.embeddedMode;
+        },
 
-    @Mutation
-    public deleteGroup(group:QlogConnectionGroup) {
-        const index = this.grouplist.indexOf(group);
-
-        if ( index !== -1 ) {
-            this.grouplist.splice(index, 1);
-        }
-    }
-
-    @Action 
-    public removeGroup(group:QlogConnectionGroup) {
-        this.context.commit( "deleteGroup", group );
-    }
-
-    @Action
-    // TODO: move this away from here to its own location
-    // We need to prepare ways to load QLOG files of various qlog versions and then map them to our internal structs
-    // A way to do this is having converters, e.g., Draft17Loader, Draft18Loader etc. that get the fileContents 
-    // and that then transform them to our internal classes
-    // Downside: we need internal classes for everything...
-    // However: if we just always use the latest versions or a single specified version from the @quictools/qlog-schema package,
-    // we can just use that internally and convert the rest to that and update when needed
-    // Potentially bigger problem: checking if json adheres to the TypeScript spec... 
-    // this could be done with something like https://github.com/typestack/class-transformer
-    // but then we would need to add additional annotations to the Schema classes... urgh
-    public async addGroupFromQlogFile( { fileContentsJSON, fileInfo } : { fileContentsJSON:any, fileInfo:any } ){
+        // TODO: move this away from here to its own location
+        // We need to prepare ways to load QLOG files of various qlog versions and then map them to our internal structs
+        // A way to do this is having converters, e.g., Draft17Loader, Draft18Loader etc. that get the fileContents
+        // and that then transform them to our internal classes
+        // Downside: we need internal classes for everything...
+        // However: if we just always use the latest versions or a single specified version from the @quictools/qlog-schema package,
+        // we can just use that internally and convert the rest to that and update when needed
+        // Potentially bigger problem: checking if json adheres to the TypeScript spec...
+        // this could be done with something like https://github.com/typestack/class-transformer
+        // but then we would need to add additional annotations to the Schema classes... urgh
+        async addGroupFromQlogFile( { fileContentsJSON, fileInfo } : { fileContentsJSON:any, fileInfo:any } ){
         
-        const group:QlogConnectionGroup | undefined = QlogLoader.fromJSON( fileContentsJSON );
+            const group:QlogConnectionGroup | undefined = QlogLoader.fromJSON( fileContentsJSON );
 
-        if ( group !== undefined ){
-            group.filename = fileInfo.filename;
-            group.URL = fileInfo.URL;
-            group.URLshort = fileInfo.URLshort;
-            this.context.commit( "addGroup", group );
-        }
-        else{
-            console.error("ConnectionStore:addGroupFromQlogFile : Qlog file could not be parsed!", fileContentsJSON, fileInfo);
+            if ( group !== undefined ){
+                group.filename = fileInfo.filename;
+                group.URL = fileInfo.URL;
+                group.URLshort = fileInfo.URLshort;
+                this.addGroup(group);
+            }
+            else{
+                console.error("ConnectionStore:addGroupFromQlogFile : Qlog file could not be parsed!", fileContentsJSON, fileInfo);
 
-            Vue.notify({
-                group: "default",
-                title: "ERROR parsing qlog file " + fileInfo.filename,
-                type: "error",
-                duration: 6000,
-                text: "File was successfully loaded but could not be parsed.<br/>Make sure you have a well-formed qlog file.<br/>View the devtools JavaScript console for more information.",
-            });
-        }
-    }
+                notify({
+                    group: "default",
+                    title: "ERROR parsing qlog file " + fileInfo.filename,
+                    type: "error",
+                    duration: 6000,
+                    text: "File was successfully loaded but could not be parsed.<br/>Make sure you have a well-formed qlog file.<br/>View the devtools JavaScript console for more information.",
+                });
+            }
+        },
 
-    @Action({commit: 'addGroup'})
-    public async DEBUG_LoadRandomFile(filename:string) {
-        const testGroup = new QlogConnectionGroup();
-        testGroup.description = filename;
+        async DEBUG_LoadRandomFile(filename:string) {
+            const testGroup = new QlogConnectionGroup();
+            testGroup.description = filename;
 
-        const connectionCount = Math.round(Math.random() * 5) + 1;
-        for ( let i = 0; i < connectionCount; ++i ){
-            const connectionTest = new QlogConnection(testGroup);
-            connectionTest.title = "Connection " + i;
+            const connectionCount = Math.round(Math.random() * 5) + 1;
+            for ( let i = 0; i < connectionCount; ++i ){
+                const connectionTest = new QlogConnection(testGroup);
+                connectionTest.title = "Connection " + i;
 
-            const events:Array<Array<any>> = new Array<Array<any>>();
+                const events:Array<Array<any>> = new Array<Array<any>>();
 
-            const eventCount = Math.ceil(Math.random() * 3);
-            for ( let j = 0; j < eventCount; ++j ){
-                events.push( [j, "testcat", "Connection #" + i + " - Event #" + j, "dummytrigger" , { dummy: true }] );
+                const eventCount = Math.ceil(Math.random() * 3);
+                for ( let j = 0; j < eventCount; ++j ){
+                    events.push( [j, "testcat", "Connection #" + i + " - Event #" + j, "dummytrigger" , { dummy: true }] );
+                }
+
+                connectionTest.setEventParser( new PreSpecEventParser() );
+                connectionTest.setEvents( events );
             }
 
-            connectionTest.setEventParser( new PreSpecEventParser() );
-            connectionTest.setEvents( events );
-        }
+            this.addGroup(testGroup);
+            return testGroup;
+        },
 
-        return testGroup;
-    }
-
-    @Action
-    public async loadFilesFromServer(queryParameters:any){
+        async loadFilesFromServer(queryParameters:any){
 
         console.log("ConnectionStore:LoadFilesFromServer ", queryParameters);
 
@@ -149,7 +144,7 @@ export default class ConnectionStore extends VuexModule {
             return;
         }
 
-        Vue.notify({
+        notify({
             group: "default",
             title: "Loading file(s) via URL",
             text: "Loading files via URL " + urlToLoad + ".<br/>The backend server downloads the files, possibly transforms them into qlog, then sends them back. This can take a while.",
@@ -175,7 +170,7 @@ export default class ConnectionStore extends VuexModule {
         let fileContents:any = null;
 
         try {
-            this.context.commit("adjustOutstandingRequestCount", 1 );
+            this.adjustOutstandingRequestCount(1);
 
             // 1. try direct download first
             if ( urlToLoad.indexOf(".qlog") >= 0 || urlToLoad.indexOf(".sqlog") >= 0 || urlToLoad.indexOf(".netlog") >= 0 || urlToLoad.indexOf(".json") >= 0 ) {
@@ -198,7 +193,7 @@ export default class ConnectionStore extends VuexModule {
                     
                     // TODO: handle this better. Now we have duplicated code here and when handling thrown exceptions
                     // maybe just throw an exception here as well and fallback to the catch()? 
-                    this.context.commit('adjustOutstandingRequestCount', -1);
+                    this.adjustOutstandingRequestCount(-1);
 
                     console.warn("ConnectionStore:loadFilesFromServer : tried to load qlog from remote server directly but got probable CORS error. Trying again via backend server.", queryParameters, apireturns);
                     apireturns = null;
@@ -206,7 +201,7 @@ export default class ConnectionStore extends VuexModule {
             }
         }
         catch (e) {
-            this.context.commit('adjustOutstandingRequestCount', -1);
+            this.adjustOutstandingRequestCount(-1);
             apireturns = null;
 
             console.warn("ConnectionStore:loadFilesFromServer : tried to load qlog from remote server directly but got probable CORS error. Trying again via backend server.", queryParameters, e);
@@ -215,6 +210,10 @@ export default class ConnectionStore extends VuexModule {
         try{
             // 2. if it wasn't a .qlog file or we got a (probable) CORS error
             if ( apireturns === null ) {
+                if ( !this.shouldUseBackendFallback() ) {
+                    throw new Error("Backend file loading fallback is disabled in embedded mode.");
+                }
+
                 let url = '/loadfiles';
                  // only for local debugging where we run the servers on different ports
                 if ( window.location.toString().indexOf("localhost:8080") >= 0 ){
@@ -227,13 +226,13 @@ export default class ConnectionStore extends VuexModule {
 
                 // url = "https://192.168.220.132:8089/loadfiles"; 
     
-                this.context.commit("adjustOutstandingRequestCount", 1 );
+                this.adjustOutstandingRequestCount(1);
     
                 // for documentation on the expected form of these parameters,
                 // see https://github.com/quiclog/qvis-server/blob/master/src/controllers/FileFetchController.ts
                 apireturns = await axios.get(url, { params: queryParameters });
     
-                this.context.commit("adjustOutstandingRequestCount", -1);
+                this.adjustOutstandingRequestCount(-1);
 
                 if ( apireturns !== null ) {
 
@@ -278,8 +277,9 @@ export default class ConnectionStore extends VuexModule {
                 }
             }
 
-            // 3. we actually got some content, can add it to the store! 
-            if ( fileContents !==  null && fileContents.qlog_version !== undefined ) {
+            // 3. we actually got some content, can add it to the store!
+            // spec-final files drop qlog_version and self-identify via schema URNs: accept either identity token
+            if ( fileContents !==  null && (fileContents.qlog_version !== undefined || hasSpecFinalQlogIdentity(fileContents)) ) {
                         
                 let urlToLoadShort = urlToLoad;
                 if ( urlToLoadShort.length > 50 ){
@@ -300,9 +300,9 @@ export default class ConnectionStore extends VuexModule {
                     }
                 }
 
-                this.context.dispatch('addGroupFromQlogFile', {fileContentsJSON: fileContents, fileInfo: fileInfo });
+                this.addGroupFromQlogFile({fileContentsJSON: fileContents, fileInfo: fileInfo });
 
-                Vue.notify({
+                notify({
                     group: "default",
                     title: "Loaded files via URL",
                     type: "success",
@@ -312,7 +312,7 @@ export default class ConnectionStore extends VuexModule {
             else{
                 console.error("ConnectionStore:LoadFilesFromServer : ERROR : trace not added to qvis! : ", queryParameters, apireturns);
 
-                Vue.notify({
+                notify({
                     group: "default",
                     title: "ERROR loading URL " + urlToLoad,
                     type: "error",
@@ -322,11 +322,11 @@ export default class ConnectionStore extends VuexModule {
             }
         }
         catch (e) {
-            this.context.commit('adjustOutstandingRequestCount', -1);
+            this.adjustOutstandingRequestCount(-1);
 
             console.error("ConnectionStore:LoadFilesFromServer : ERROR : trace not added to qvis! : ", e, queryParameters);
 
-            Vue.notify({
+            notify({
                 group: "default",
                 title: "ERROR loading URL " + urlToLoad,
                 type: "error",
@@ -334,11 +334,10 @@ export default class ConnectionStore extends VuexModule {
                 text: "File(s) could not be loaded from " + urlToLoad + ".<br/>View the devtools JavaScript console for more information.",
             });
         }
-    }
+    },
 
     // we put this here because we want to load Demo files outside of the FileManager as well (so we don't always have to switch when testing)
-    @Action
-    public loadExamplesForDemo() {
+    loadExamplesForDemo() {
         // this.loadQlogDirectlyFromURL( { url : "standalone_data/draft-01/5stream_from_chrome.qlog", filename: "DEMO_5streams.qlog"} );
         // this.loadQlogDirectlyFromURL( { url : "standalone_data/draft-01/10paralllel_aioquic.qlog", filename: "DEMO_10stream_aioquic.qlog"} );
         // this.loadQlogDirectlyFromURL( { url : "standalone_data/draft-01/10paralllel_litespeed.qlog", filename: "DEMO_10stream_multiplexing.qlog (14.6MB)"} );
@@ -355,32 +354,32 @@ export default class ConnectionStore extends VuexModule {
         // this.loadQlogDirectlyFromURL( { url : "standalone_data/tcp/output3.json", filename: "DEMO_paddingtest (4MB)"} );
         
         
-    }
+    },
 
-    @Action
-    public loadQlogDirectlyFromURL( { url, filename } : { url:any, filename:string } ) {
+    loadQlogDirectlyFromURL( { url, filename } : { url:any, filename:string } ) {
 
-        Vue.notify({
+        notify({
             group: "default",
             title: "Loading qlog file directly",
             text: "Loading qlog file \"" + filename + "\" from URL " + url + ". Large files can take a while to load.",
         });
 
-        this.context.commit("adjustOutstandingRequestCount", 1 );
+        this.adjustOutstandingRequestCount(1);
 
         axios.get( url, {responseType: "text", transformResponse: undefined} ) // transformResponse needed because responseType 'text' doesn't prevent them from parsing JSON...
         .then( (res:AxiosResponse<any> ) => {
 
-            this.context.commit("adjustOutstandingRequestCount", -1 );
+            this.adjustOutstandingRequestCount(-1);
 
             const fileContentsRaw:any = res.data;
 
             let fileContents:any = StreamingJSONParser.parseQlogText( fileContentsRaw );
 
-            if ( fileContents && !fileContents.error && !fileContents.error_description && fileContents.qlog_version ){
-                this.context.dispatch('addGroupFromQlogFile', {fileContentsJSON: fileContents, fileInfo: { filename:filename }});
+            // spec-final files drop qlog_version and self-identify via schema URNs: accept either identity token
+            if ( fileContents && !fileContents.error && !fileContents.error_description && (fileContents.qlog_version || hasSpecFinalQlogIdentity(fileContents)) ){
+                this.addGroupFromQlogFile({fileContentsJSON: fileContents, fileInfo: { filename:filename }});
 
-                Vue.notify({
+                notify({
                     group: "default",
                     title: "Loaded " + filename,
                     type: "success",
@@ -396,9 +395,9 @@ export default class ConnectionStore extends VuexModule {
                 fileContents = StreamingJSONParser.parseJSONWithDeduplication( fileContentsRaw );
 
                 const convertedContents = TCPToQlog.convert( fileContents );
-                this.context.dispatch('addGroupFromQlogFile', {fileContentsJSON: convertedContents, fileInfo: {filename: filename}});
+                this.addGroupFromQlogFile({fileContentsJSON: convertedContents, fileInfo: {filename: filename}});
 
-                Vue.notify({
+                notify({
                     group: "default",
                     title: "Loaded " + filename,
                     type: "success",
@@ -409,7 +408,7 @@ export default class ConnectionStore extends VuexModule {
             else{
                 console.error("FileManagerContainer:loadDirectlyFromURL: error downloading file : ", url, res);
                 
-                Vue.notify({
+                notify({
                     group: "default",
                     title: "ERROR loading " + filename,
                     type: "error",
@@ -421,7 +420,7 @@ export default class ConnectionStore extends VuexModule {
         // .catch( (e) => {
         //     this.context.commit("adjustOutstandingRequestCount", -1 );
             
-        //     Vue.notify({
+        //     notify({
         //         group: "default",
         //         title: "ERROR loading " + filename,
         //         type: "error",
@@ -429,5 +428,9 @@ export default class ConnectionStore extends VuexModule {
         //         text: "This file could not be loaded from " + url + ".<br/>View the devtools JavaScript console for more information. " + e,
         //     });
         // })
-    }
-}
+    },
+    },
+});
+
+export type ConnectionStore = ReturnType<typeof useConnectionStore>;
+export default useConnectionStore;

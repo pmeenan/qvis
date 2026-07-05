@@ -1,39 +1,42 @@
 <template>
     <div style="background-color: #d1ecf1; padding: 0px 10px;" >
 
-        <b-container fluid>
-            <b-row align-h="center">
+        <div class="container-fluid">
+            <div class="row justify-content-center">
                 <p  style="margin-top: 10px;">Select a trace via the dropdown(s) below to visualize it in the stream graph</p>
-            </b-row>
-            <b-row align-h="center">
+            </div>
+            <div class="row justify-content-center">
                 <ConnectionConfigurator v-if="config.connections.length > 0" :allGroups="store.groups" :connection="config.connections[0]" :canBeRemoved="false" :onConnectionSelected="onConnectionSelected" />
-            </b-row>
+            </div>
 
-            <b-row align-h="center">
-                <b-form-checkbox
-                    id="waterfall-checkbox"
-                    v-model="config.showwaterfall"
-                    name="waterfall-checkbox"
-                    class="mr-3"
-                >
-                    Show waterfall
-                </b-form-checkbox>
+            <div class="row justify-content-center">
+                <div class="form-check form-check-inline me-3">
+                    <input
+                        id="waterfall-checkbox"
+                        v-model="config.showwaterfall"
+                        class="form-check-input"
+                        type="checkbox"
+                        name="waterfall-checkbox">
+                    <label class="form-check-label" for="waterfall-checkbox">Show waterfall</label>
+                </div>
 
-                <b-form-checkbox
-                    id="byteranges-checkbox"
-                    v-model="config.showbyteranges"
-                    name="byteranges-checkbox"
-                >
-                    Show byte ranges
-                </b-form-checkbox>
+                <div class="form-check form-check-inline">
+                    <input
+                        id="byteranges-checkbox"
+                        v-model="config.showbyteranges"
+                        class="form-check-input"
+                        type="checkbox"
+                        name="byteranges-checkbox">
+                    <label class="form-check-label" for="byteranges-checkbox">Show byte ranges</label>
+                </div>
 
-                <b-button class="ml-3" v-if="allowSelectAll" @click="selectAllConnections()" :disabled="config.connections.length === 0" variant="primary">Load all connections at once</b-button>
-            </b-row>
+                <button type="button" class="btn btn-primary ms-3" v-if="allowSelectAll" @click="selectAllConnections()" :disabled="config.connections.length === 0">Load all connections at once</button>
+            </div>
 
-            <b-alert v-if="this.store.outstandingRequestCount === 0 && this.store.groups.length === 0" show variant="danger">Please load a trace file to visualize it</b-alert>
-            <b-alert v-else-if="this.store.groups.length === 0" show variant="warning">Loading files...</b-alert>
+            <div v-if="store.outstandingRequestCount === 0 && store.groups.length === 0" class="alert alert-danger" role="alert">Please load a trace file to visualize it</div>
+            <div v-else-if="store.groups.length === 0" class="alert alert-warning" role="alert">Loading files...</div>
 
-        </b-container>
+        </div>
 
     </div>
 </template>
@@ -49,42 +52,55 @@
 </style>
 
 <script lang="ts">
-    import { getModule } from "vuex-module-decorators";
-    import { Component, Vue, Prop } from "vue-property-decorator";
+    import { defineComponent, markRaw, toRaw, type PropType } from "vue";
     import MultiplexingGraphConfig from "./data/MultiplexingGraphConfig";
-    import * as qlog from '@/data/QlogSchema';
 
     import ConnectionConfigurator from "@/components/shared/ConnectionConfigurator.vue";
-    import ConnectionStore from "@/store/ConnectionStore";
-    import ConnectionGroup from "@/data/ConnectionGroup";
+    import { useConnectionStore } from "@/store/ConnectionStore";
     import Connection from "@/data/Connection";
-    import QlogConnection from '@/data/Connection';
 
-    @Component({
+    export default defineComponent({
+        name: "MultiplexingGraphConfigurator",
         components: {
             ConnectionConfigurator,
         },
-    })
-    export default class MultiplexingGraphConfigurator extends Vue {
-        @Prop()
-        public config!: MultiplexingGraphConfig;
-
-        public store:ConnectionStore = getModule(ConnectionStore, this.$store);
-
-        public onConnectionSelected(connection:Connection) {
+        props: {
+            config: {
+                type: Object as PropType<MultiplexingGraphConfig>,
+                required: true,
+            },
+        },
+        data() {
+            return {
+                store: useConnectionStore(),
+            };
+        },
+        computed: {
+            allowSelectAll(): boolean {
+                // e.g., add ?multimultiplexing=true to the URL
+                return  (window.location.toString().indexOf(":8080") >= 0) ||
+                        (window.location.toString().indexOf("localhost") >= 0) ||
+                        (window.location.toString().indexOf("multimultiplexing") >= 0); // only for local testing for now! // TODO: CLEAN UP
+            },
+        },
+        mounted() {
+            if ( this.config.connections.length === 0 && this.store.groups.length > 0 ){
+                this.selectDefault();
+            }
+        },
+        updated() {
+            if ( this.config.connections.length === 0 && this.store.groups.length > 0 ){
+                this.selectDefault();
+            }
+        },
+        methods: {
+        onConnectionSelected(connection:Connection) {
             console.log("MultiplexingGraphConfigurator:onConnectionSelected : ", this.config, connection);
 
-            this.config.connections = [ connection ];
-        }
+            this.config.connections = [ markRaw(toRaw(connection)) ];
+        },
 
-        public get allowSelectAll() : boolean {
-            // e.g., add ?multimultiplexing=true to the URL 
-            return  (window.location.toString().indexOf(":8080") >= 0) || 
-                    (window.location.toString().indexOf("localhost") >= 0) || 
-                    (window.location.toString().indexOf("multimultiplexing") >= 0); // only for local testing for now! // TODO: CLEAN UP
-        }
-
-        public selectAllConnections() {
+        selectAllConnections() {
 
             // TODO: just for paper results, remove!
             (window as any).holblockinfo = new Array<any>();
@@ -92,7 +108,7 @@
             let conns = [];
             for ( const group of this.store.groups ){
                 //if ( group.filename.indexOf("DEMO") < 0 ){
-                    conns.push( ...group.getConnections() );
+                    conns.push( ...group.getConnections().map((connection) => markRaw(toRaw(connection))) );
                 //}
             }
 
@@ -104,24 +120,13 @@
             this.config.showwaterfall = true;
             this.config.showbyteranges = false;
             this.config.connections = conns;
-        }
+        },
 
-        public mounted(){
-            if ( this.config.connections.length === 0 && this.store.groups.length > 0 ){
-                this.selectDefault();
-            }
-        }
-
-        public updated(){
-            if ( this.config.connections.length === 0 && this.store.groups.length > 0 ){
-                this.selectDefault();
-            }
-        }
-
-        protected selectDefault(){
+        selectDefault(){
             console.log("MultiplexingGraphConfigurator:selectDefault: adding new default connection configurator", this.store.groups);
-            this.config.connections = [ this.store.groups[0].getConnections()[0] ];
-        }
-    }
+            this.config.connections = [ markRaw(toRaw(this.store.groups[0].getConnections()[0])) ];
+        },
+        },
+    });
 
 </script>

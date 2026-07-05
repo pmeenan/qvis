@@ -1,13 +1,13 @@
 <template>
     <div style="background-color: #cce5ff; padding: 0px 10px;" >
         <!--<div>{{(config ? config.manualRTT + " - " + config.scale : "UNKNOWN" )}}</div>-->
-        <!--<b-button @click="adjustConfigTest()">Adjust config</b-button> -->
+        <!--<button @click="adjustConfigTest()">Adjust config</button> -->
 
         <p style="padding-top: 10px;">Select one or more traces via the dropdown(s) below to visualize them in the sequence diagram</p>
-        <b-container fluid>
-                <b-row>
+        <div class="container-fluid">
+                <div class="row">
                     <!-- Note: adding connection.timeOffset to the :key is PARAMOUNT to getting reactivity working! -->
-                    <ConnectionConfigurator v-for="(connection, index) of this.config.connections" 
+                    <ConnectionConfigurator v-for="(connection, index) of config.connections" 
                         :allGroups="store.groups" 
                         :connection="connection.connection" 
                         :key="index + connection.timeOffset" 
@@ -20,78 +20,96 @@
                         :onConnectionSelected="onConnectionSelected.bind(this, index)" 
                         :onRemoved="onConnectionRemoved.bind(this, index)" 
                         :onNumericalValueChanged="onTimeOffsetChange.bind(this, index)" />
-                </b-row>
-        </b-container>
+                </div>
+        </div>
     <!--
         <div v-for="(group, index) of store.groups" :key="index">
             {{group.description}}
             <div v-for="(connection,index) of group.GetConnections()" :key="index">
-                - <b-button @click="addConnection(connection)">Add Connection</b-button>
+                - <button @click="addConnection(connection)">Add Connection</button>
             </div>
         </div>
     -->
 
-        <b-container fluid> 
-            <b-row>
-                <b-col> 
-                    <b-button @click="selectDefault()">Add trace</b-button><!-- &#43; PLUS + -->
-                </b-col>
-                <b-col cols="1" align-self="center"> <div class="text-right" v-b-tooltip.hover title="Increase if you have sub-millisecond latencies or want more space between events. 1 = ms level, 1000 = us level. Typically 10 or 100 is enough.">Time multiplier: </div></b-col>
-                <b-col cols="1"> <b-input type="number" v-model="config.timeResolution"/></b-col>
-            </b-row>
-        </b-container>
+        <div class="container-fluid"> 
+            <div class="row">
+                <div class="col"> 
+                    <button type="button" class="btn btn-secondary" @click="selectDefault()">Add trace</button><!-- &#43; PLUS + -->
+                </div>
+                <div class="col-1 align-self-center">
+                    <div class="text-end" title="Increase if you have sub-millisecond latencies or want more space between events. 1 = ms level, 1000 = us level. Typically 10 or 100 is enough.">Time multiplier: </div>
+                </div>
+                <div class="col-1"><input type="number" class="form-control" v-model="config.timeResolution"></div>
+            </div>
+        </div>
 
-        <b-alert v-if="connectionIsUnknownPerspective" show variant="danger">The selected trace has an unknown vantage point. We guessed it based on heuristics, but this could be wrong!</b-alert>
+        <div v-if="connectionIsUnknownPerspective" class="alert alert-danger" role="alert">The selected trace has an unknown vantage point. We guessed it based on heuristics, but this could be wrong!</div>
 
-        <b-alert v-if="this.store.outstandingRequestCount === 0 && this.store.groups.length === 0" show variant="danger">Please load a trace file to visualize it</b-alert>
-        <b-alert v-else-if="this.store.groups.length === 0" show variant="warning">Loading files...</b-alert>
+        <div v-if="store.outstandingRequestCount === 0 && store.groups.length === 0" class="alert alert-danger" role="alert">Please load a trace file to visualize it</div>
+        <div v-else-if="store.groups.length === 0" class="alert alert-warning" role="alert">Loading files...</div>
     </div>
 </template>
 
 <script lang="ts">
-    import { getModule } from "vuex-module-decorators";
-    import { Component, Vue, Prop } from "vue-property-decorator";
+    import { defineComponent, type PropType } from "vue";
     import SequenceDiagramConfig from "./data/SequenceDiagramConfig";
     import ConnectionConfigurator from "@/components/shared/ConnectionConfigurator.vue";
     import * as qlog from '@/data/QlogSchema';
 
-    import ConnectionStore from "@/store/ConnectionStore";
-    import ConnectionGroup from "@/data/ConnectionGroup";
+    import { useConnectionStore } from "@/store/ConnectionStore";
     import Connection from "@/data/Connection";
 
-    @Component({
+    export default defineComponent({
+        name: "SequenceDiagramConfigurator",
         components: {
             ConnectionConfigurator,
         },
-    })
-    export default class SequenceDiagramConfigurator extends Vue {
-        @Prop()
-        protected config!: SequenceDiagramConfig;
+        props: {
+            config: {
+                type: Object as PropType<SequenceDiagramConfig>,
+                required: true,
+            },
+        },
+        data() {
+            return {
+                store: useConnectionStore(),
+            };
+        },
+        computed: {
+            connectionIsUnknownPerspective(): boolean {
 
-        protected store:ConnectionStore = getModule(ConnectionStore, this.$store);
+                if ( this.config.connections.length === 0 ){
+                    return false;
+                }
 
-        public get connectionIsUnknownPerspective() {
+                let connection:Connection = this.config.connections[0].connection;
+                if ( connection.wasAutoGenerated && this.config.connections.length > 1 ) {
+                    connection = this.config.connections[1].connection;
+                }
 
-            if ( this.config.connections.length === 0 ){
-                return false;
+                return  connection.getEvents().length > 0 &&
+                        connection.vantagePoint &&
+                        connection.vantagePoint.type === qlog.VantagePointType.unknown;
+            },
+        },
+        mounted() {
+            if ( this.config.connections.length === 0 && this.store.groups.length > 0 ){
+                this.selectDefault();
             }
-
-            let connection:Connection = this.config.connections[0].connection;
-            if ( connection.wasAutoGenerated && this.config.connections.length > 1 ) {
-                connection = this.config.connections[1].connection;
+        },
+        updated() {
+            if ( this.config.connections.length === 0 && this.store.groups.length > 0 ){
+                this.selectDefault();
             }
+        },
+        methods: {
 
-            return  connection.getEvents().length > 0 &&
-                    connection.vantagePoint && 
-                    connection.vantagePoint.type === qlog.VantagePointType.unknown;
-        }
-
-        public allowCustomTimeOffset(conn:Connection, index:number):boolean {
+        allowCustomTimeOffset(_conn:any, index:number):boolean {
             // only allow custom offsets for non-auto generated traces (they don't make sense for autogenerated ones)
             return index > 0 && this.config.connections.find( (c) => c.connection.wasAutoGenerated ) === undefined; 
-        }
+        },
 
-        public onConnectionSelected(connectionIndex:number, connection:Connection){
+        onConnectionSelected(connectionIndex:number, connection:Connection){
             console.log("SequenceDiagramConfigurator:onConnectionSelected : ", this.config, connectionIndex, connection);
 
             // Vue.set(this.config.connections, connectionIndex, connection);
@@ -172,7 +190,7 @@
 
                     if ( i !== 0 && vantagePoint !== previousVantagePoint ){
                         // not all of the same type, user can solve the situation themself
-                        Vue.set(this.config.connections, connectionIndex, SequenceDiagramConfig.createConnectionWithTimeoffset(connection));
+                        this.config.connections.splice(connectionIndex, 1, SequenceDiagramConfig.createConnectionWithTimeoffset(connection));
                         allTheSame = false;
                         break;
                     }
@@ -185,7 +203,7 @@
                     // e.g., for pcap2qlog, all traces will have vantagepoint network, with flow type client, because we don't know any better
                     // without this, we wouldn't be able to select a client and server-side pcap separately, as they have the same vantagepoint from pcap2qlog
                     allTheSame = false; // causes us to skip the code below, keeping the last selected trace as expected
-                    Vue.set(this.config.connections, connectionIndex, SequenceDiagramConfig.createConnectionWithTimeoffset(connection)); // replace existing conn with the newly selected one
+                    this.config.connections.splice(connectionIndex, 1, SequenceDiagramConfig.createConnectionWithTimeoffset(connection)); // replace existing conn with the newly selected one
                     // NOTE: this probably messes with the logic in some situations, but can't really solve those properly either way
                 }
 
@@ -220,7 +238,7 @@
                 // Vue reactivity cannot detect direct index-based changes to an array, i.e.,
                 // this.config.connections[connectionIndex] = connection;
                 // will not work. We need to use Vue.set (or .slice) to gain reactivity
-                Vue.set(this.config.connections, connectionIndex, SequenceDiagramConfig.createConnectionWithTimeoffset(connection));
+                this.config.connections.splice(connectionIndex, 1, SequenceDiagramConfig.createConnectionWithTimeoffset(connection));
             }
 
             // just select all other connections after this one from the same parent if there are more than 1 in a group
@@ -236,32 +254,21 @@
 
             //     this.config.connections.splice(rendererIndex); // remove everything starting at this index
             // }
-        }
+        },
 
-        public mounted(){
-            if ( this.config.connections.length === 0 && this.store.groups.length > 0 ){
-                this.selectDefault();
-            }
-        }
-
-        public updated(){
-            if ( this.config.connections.length === 0 && this.store.groups.length > 0 ){
-                this.selectDefault();
-            }
-        }
-
-        protected selectDefault(){
+        selectDefault(){
             console.log("selectDefault: adding new default connection configurator", this.store.groups);
             this.config.connections.push( SequenceDiagramConfig.createConnectionWithTimeoffset(this.store.groups[0].getConnections()[0]) );
-        }
+        },
 
-        protected onConnectionRemoved(connectionIndex:number){
+        onConnectionRemoved(connectionIndex:number){
             this.config.connections.splice(connectionIndex, 1);
-        }
+        },
 
-        protected onTimeOffsetChange(connectionIndex:number, offset:number){
+        onTimeOffsetChange(connectionIndex:number, offset:number){
             this.config.connections[connectionIndex].timeOffset = offset;
-        }
-    }
+        },
+        },
+    });
 
 </script>

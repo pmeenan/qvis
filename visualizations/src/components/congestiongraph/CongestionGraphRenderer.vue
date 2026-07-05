@@ -80,52 +80,59 @@
 </style>
 
 <script lang="ts">
-    import { Component, Vue, Prop, Watch } from "vue-property-decorator";
+    import { defineComponent, markRaw, type PropType } from "vue";
     import CongestionGraphConfig from "./data/CongestionGraphConfig";
     import CongestionGraphD3Renderer from "./renderer/CongestionGraphD3Renderer";
 
-    @Component
-    export default class CongestionGraphRenderer extends Vue {
-        @Prop()
-        public config!: CongestionGraphConfig;
-
-        protected get connection(){
-            return this.config.connection;
-        }
-
-        protected renderer: CongestionGraphD3Renderer | undefined = undefined;
-
-        public created(){
-            this.renderer = new CongestionGraphD3Renderer("congestion-graph");
-            this.config.renderer = this.renderer;
-        }
-
-        public mounted(){
+    export default defineComponent({
+        name: "CongestionGraphRenderer",
+        props: {
+            config: {
+                type: Object as PropType<CongestionGraphConfig>,
+                required: true,
+            },
+        },
+        data() {
+            return {
+                renderer: undefined as CongestionGraphD3Renderer | undefined,
+            };
+        },
+        computed: {
+            connection() {
+                return this.config.connection;
+            },
+        },
+        mounted() {
+            const renderer = markRaw(new CongestionGraphD3Renderer("congestion-graph"));
+            this.renderer = renderer;
+            this.config.renderer = renderer;
             // mainly for when we switch away, and then back to the congestionGraph
             if ( this.config && this.renderer && this.config.connection !== undefined ) {
                 this.renderer.render( this.config );
             }
-        }
-
-        protected hideLegend(evt:any) {
+        },
+        methods: {
+        hideLegend(evt:any) {
             evt.target.classList.add("hiddenLegend");
-        }
+        },
 
-        protected showLegend(evt:any) {
+        showLegend(evt:any) {
             evt.target.classList.remove("hiddenLegend");
-        }
+        },
+        },
+        watch: {
+            config: {
+                immediate: true,
+                deep: true,
+                handler(newConfig: CongestionGraphConfig, oldConfig: CongestionGraphConfig) {
+                    console.log("CongestionGraphRenderer:onConfigChanged : ", newConfig, oldConfig);
 
-        // Note: we could use .beforeUpdate or use an explicit event or a computed property as well
-        // however, this feels more explicit
-        @Watch('config', { immediate: true, deep: true })
-        protected onConfigChanged(newConfig: CongestionGraphConfig, oldConfig: CongestionGraphConfig) {
-            console.log("CongestionGraphRenderer:onConfigChanged : ", newConfig, oldConfig);
-
-            if ( this.renderer && newConfig.connection !== undefined ) {
-                this.renderer.render( newConfig );
-            }
-        }
-
-    }
+                    if ( this.renderer && newConfig.connection !== undefined ) {
+                        this.renderer.render( newConfig );
+                    }
+                },
+            },
+        },
+    });
 
 </script>

@@ -1,17 +1,17 @@
 <template>
     <div style="background-color: #fff3cd; padding: 0px 10px;" >
 
-        <b-container fluid>
-            <b-row align-h="center">
+        <div class="container-fluid">
+            <div class="row justify-content-center">
                 <p style="margin-top: 10px;">Select a file via the dropdown(s) below to view its statistics</p>
-            </b-row>
-            <b-row align-h="center">
+            </div>
+            <div class="row justify-content-center">
                 <ConnectionConfigurator v-if="config.group !== undefined" :allGroups="store.groups" :group="config.group" :canBeRemoved="false" :allowGroupSelection="true" :allowConnectionSelection="false" :onGroupSelected="onGroupSelected" />
-            </b-row>
+            </div>
 
-            <b-alert v-if="this.store.outstandingRequestCount === 0 && this.store.groups.length === 0" show variant="danger">Please load a trace file to visualize it</b-alert>
-            <b-alert v-else-if="this.store.groups.length === 0" show variant="warning">Loading files...</b-alert>
-        </b-container>
+            <div v-if="store.outstandingRequestCount === 0 && store.groups.length === 0" class="alert alert-danger" role="alert">Please load a trace file to visualize it</div>
+            <div v-else-if="store.groups.length === 0" class="alert alert-warning" role="alert">Loading files...</div>
+        </div>
 
     </div>
 </template>
@@ -27,50 +27,51 @@
 </style>
 
 <script lang="ts">
-    import { getModule } from "vuex-module-decorators";
-    import { Component, Vue, Prop } from "vue-property-decorator";
+    import { defineComponent, type PropType } from "vue";
     import StatisticsConfig from "./data/StatisticsConfig";
-    import * as qlog from '@/data/QlogSchema';
 
     import ConnectionConfigurator from "@/components/shared/ConnectionConfigurator.vue";
-    import ConnectionStore from "@/store/ConnectionStore";
+    import { useConnectionStore } from "@/store/ConnectionStore";
     import ConnectionGroup from "@/data/ConnectionGroup";
-    import Connection from "@/data/Connection";
 
-    @Component({
+    export default defineComponent({
+        name: "StatisticsConfigurator",
         components: {
             ConnectionConfigurator,
         },
-    })
-    export default class StatisticsConfigurator extends Vue {
-        @Prop()
-        public config!: StatisticsConfig;
-
-        public store:ConnectionStore = getModule(ConnectionStore, this.$store);
-
-        public onGroupSelected(group:ConnectionGroup) {
+        props: {
+            config: {
+                type: Object as PropType<StatisticsConfig>,
+                required: true,
+            },
+        },
+        data() {
+            return {
+                store: useConnectionStore(),
+            };
+        },
+        mounted() {
+            if ( this.config.group === undefined && this.store.groups.length > 0 ){
+                this.selectDefault();
+            }
+        },
+        updated() {
+            if ( this.config.group === undefined && this.store.groups.length > 0 ){
+                this.selectDefault();
+            }
+        },
+        methods: {
+        onGroupSelected(group:ConnectionGroup) {
             console.log("StatisticsConfigurator:onGroupSelected : ", this.config, group);
 
             this.config.group = group;
-        }
+        },
 
-        public mounted(){
-            if ( this.config.group === undefined && this.store.groups.length > 0 ){
-                this.selectDefault();
-            }
-        }
-
-        public updated(){
-            if ( this.config.group === undefined && this.store.groups.length > 0 ){
-                this.selectDefault();
-            }
-        }
-
-        protected selectDefault(){
+        selectDefault(){
             console.log("selectDefault: adding new default connection configurator", this.store.groups);
             this.config.group = ( this.store.groups[0] );
-        }
-
-    }
+        },
+        },
+    });
 
 </script>

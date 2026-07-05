@@ -130,7 +130,7 @@ export default class NewlineJSONToQlog {
     */
     protected static createNewlineTransformer( inputStream:ReadableStream ):ReadableStream {
 
-        let is_reader:ReadableStreamReader|undefined = undefined;
+        let is_reader:ReadableStreamReader<any>|undefined = undefined;
         let cancellationRequest:boolean = false;
 
         let readLineCount = 0;

@@ -1,4 +1,5 @@
 import * as qlogschema from '@/data/QlogSchema';
+import { hasSpecFinalQlogIdentity } from '@/data/QlogSupport';
 
 export default class TextSequenceJSONToQlog {
 
@@ -7,8 +8,8 @@ export default class TextSequenceJSONToQlog {
         console.log("TextSequenceJSONToQlog: converting textsequence JSON file");
 
         // make proper qlogschema.IQLog again when we've updated the schema to match draft-02 proper
-        const qlogFile:any = { qlog_version: "draft-02", qlog_format: qlogschema.LogFormat.JSONSEQ, traces: new Array<qlogschema.ITrace>() } as qlogschema.IQLog;
-        
+        const qlogFile:any = { qlog_format: qlogschema.LogFormat.JSONSEQ, traces: new Array<qlogschema.ITrace>() } as qlogschema.IQLog;
+
 
         const rawJSONentries = await TextSequenceJSONToQlog.parseTextSequences( inputStream );
 
@@ -19,43 +20,81 @@ export default class TextSequenceJSONToQlog {
         }
 
         // in json-seq format, we should first have the file "header", a separate object containing the qlog metadata
-        // and then we should have a single entry per event after that. 
+        // and then we should have a single entry per event after that.
+        // concatenated logs are legal in JSON-SEQ though: every header record starts a fresh trace,
+        // so a single stream can carry multiple traces (e.g., a client and a server log appended together)
 
-        const header = rawJSONentries.shift();
+        let currentTrace:qlogschema.ITrace|undefined = undefined;
+        let headerCount = 0;
 
-        if ( header.qlog_version === undefined || header.qlog_format !== qlogschema.LogFormat.JSONSEQ || header.trace === undefined ) { 
-            console.error("TextSequenceJSONToQlog: File did not start with the proper qlog header (needs version, format and trace)! Aborting...", header);
+        for ( const record of rawJSONentries ) {
+
+            if ( TextSequenceJSONToQlog.isHeaderRecord(record) ) {
+
+                const format = record.qlog_format || record.serialization_format;
+                if ( !TextSequenceJSONToQlog.isJsonSeqFormat(format) || record.trace === undefined ) {
+                    console.error("TextSequenceJSONToQlog: Invalid qlog header record (needs identity, JSON-SEQ format and trace)! Skipping its events and continuing...", record);
+
+                    currentTrace = undefined;
+                    continue;
+                }
+
+                ++headerCount;
+
+                // top-level metadata comes from the first valid header, but we handle trace separately below
+                if ( headerCount === 1 ) {
+                    for ( const key of Object.keys(record) ) {
+                        if ( key !== "trace" ) {
+                            (qlogFile as any)[key] = record[key];
+                        }
+                    }
+                }
+
+                currentTrace = {
+                    vantage_point: {
+                        type: qlogschema.VantagePointType.unknown,
+                    },
+                    events: [],
+                };
+
+                // copy over everything
+                for ( const key of Object.keys(record.trace) ) {
+                    (currentTrace as any)[ key ] = record.trace[key];
+                }
+
+                currentTrace.events = []; // in case the header's trace carried a (bogus) events field
+
+                qlogFile.traces.push( currentTrace );
+            }
+            else if ( currentTrace !== undefined ) {
+                currentTrace.events.push( record );
+            }
+            else {
+                console.error("TextSequenceJSONToQlog: event record found before any valid qlog header. Skipping and continuing.", record);
+            }
+        }
+
+        if ( headerCount === 0 ) {
+            console.error("TextSequenceJSONToQlog: File did not contain a proper qlog header (needs identity, JSON-SEQ format and trace)! Aborting...", rawJSONentries[0]);
 
             return undefined;
         }
 
-        // copy over everything, but we'll handle trace separately below
-        for ( const key of Object.keys(header) ) {
-            if ( key !== "trace" ) {
-                (qlogFile as any)[key] = header[key];
-            }
-        }
-
-        // json-seq files have just a single trace by definition
-        const trace:qlogschema.ITrace = {
-            vantage_point: { 
-                type: qlogschema.VantagePointType.unknown,
-            },
-            events: [],
-        };
-
-        // copy over everything
-        for ( const key of Object.keys(header.trace) ) {
-            (trace as any)[ key ] = header.trace[key];
-        }
-
-        trace.events = rawJSONentries; // the header was removed by calling shift() above, so these should be the raw events
-
-        
-        qlogFile.traces = [ trace ];
-
         return qlogFile as qlogschema.IQLog;
-    } 
+    }
+
+    // a header record carries a qlog identity (draft-era qlog_version or spec-final schema URNs)
+    // and/or the trace metadata; event records carry none of those
+    protected static isHeaderRecord( record:any ) : boolean {
+        return record !== null && typeof record === "object" &&
+               ( record.qlog_version !== undefined || record.trace !== undefined || hasSpecFinalQlogIdentity(record) );
+    }
+
+    // draft-era files spell the format "JSON-SEQ", but the RFC's canonical serialization_format
+    // value is the media type "application/qlog+json-seq": match case-insensitively on the token
+    protected static isJsonSeqFormat( format:any ) : boolean {
+        return typeof format === "string" && format.toLowerCase().indexOf("json-seq") >= 0;
+    }
 
     protected static async parseTextSequences( inputStream:ReadableStream ) : Promise<Array<any>> {
 
@@ -130,7 +169,7 @@ export default class TextSequenceJSONToQlog {
     */
     protected static createRecordTransformer( inputStream:ReadableStream ):ReadableStream {
 
-        let is_reader:ReadableStreamReader|undefined = undefined;
+        let is_reader:ReadableStreamReader<any>|undefined = undefined;
         let cancellationRequest:boolean = false;
 
         let readRecordCount = 0;
@@ -195,17 +234,11 @@ export default class TextSequenceJSONToQlog {
                                 const data_record = JSON.parse(r);
                                 // controller.enqueue(data_record) would immediately pass the single read object on, but we batch it instead on the next line
                                 output.push( data_record );
-                            } 
+                            }
                             catch (e) {
+                                // malformed individual records are skipped so a partially corrupt
+                                // stream still yields every valid record around the bad one
                                 console.error("TextSequenceJSONToQlog: line #" + readRecordCount + " was invalid JSON. Skipping and continuing.", r, records.length);
-                                return;
-
-                                // // TODO: what does this do practically? We probably want to (silently?) ignore errors?
-                                // controller.error(e);
-                                // cancellationRequest = true;
-                                // reader.cancel();
-
-                                // return;
                             }
                         }
                     }
