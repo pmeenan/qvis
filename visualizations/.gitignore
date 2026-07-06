@@ -19,3 +19,6 @@ yarn-error.log*
 *.ntvs*
 *.njsproj
 *.sln
+
+# npm pack output (releases are published to npm / attached to GitHub releases, never tracked)
+*.tgz
