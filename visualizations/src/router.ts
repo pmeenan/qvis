@@ -7,6 +7,7 @@ import PacketizationDiagram from "./views/PacketizationDiagram.vue";
 import CongestionGraph from "./views/CongestionGraph.vue";
 import MultiplexingGraph from "./views/MultiplexingGraph.vue";
 import Statistics from "./views/Statistics.vue";
+import EventLog from "./views/EventLog.vue";
 import { isEmbeddedMode } from "./embed";
 
 const router = createRouter({
@@ -14,7 +15,7 @@ const router = createRouter({
     routes: [
         {
             path: "/",
-            redirect: () => isEmbeddedMode() ? "/sequence" : "/files",
+            redirect: () => isEmbeddedMode() ? "/events" : "/files",
         },
         {
             path: "/debug",
@@ -29,6 +30,14 @@ const router = createRouter({
             name: "FileManager",
             components: {
                 default: FileManager,
+                menu: MainMenu,
+            },
+        },
+        {
+            path: "/events",
+            name: "events",
+            components: {
+                default: EventLog,
                 menu: MainMenu,
             },
         },
@@ -100,7 +109,7 @@ router.beforeEach((to, from, next) => {
 
     if ( isEmbeddedMode() ) {
         if (to.path === "/files") {
-            next({ path: "/sequence", query: to.query });
+            next({ path: "/events", query: to.query });
         }
         else {
             next();

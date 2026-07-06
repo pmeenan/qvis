@@ -9,6 +9,11 @@
                         Manage files
                         </router-link>
                     </li>
+                    <li class="nav-item events-link">
+                        <router-link to="/events" class="nav-link" :class="{ active: route.fullPath.indexOf('/events') >= 0 }">
+                        Events
+                        </router-link>
+                    </li>
                     <li class="nav-item sequence-link">
                         <router-link to="/sequence" class="nav-link" :class="{ active: route.fullPath.indexOf('/sequence') >= 0 }">
                         Sequence
@@ -77,6 +82,13 @@
         font-weight: bold;
         background-color: #fff;
         border-bottom-color: #fff;
+    }
+
+    #MainMenu li.events-link a.active {
+        color: black;
+        font-weight: bold;
+        background-color: #e2d9f3;
+        border-bottom-color: #e2d9f3;
     }
 
     #MainMenu li.sequence-link a.active {

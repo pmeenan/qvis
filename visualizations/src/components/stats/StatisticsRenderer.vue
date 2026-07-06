@@ -1,7 +1,9 @@
 <template>
     <div>
         <div id="statistics-container" style="width: 100%; border:5px solid #fff3cd; min-height: 200px;">
-            <div v-if="group !== undefined" style="width: 50%; min-width: 1024px; margin-left: auto; margin-right: auto;">
+            <!-- min() keeps the 1024px floor from forcing horizontal overflow when the
+                 viewport (minus the container border) is narrower than 1024px -->
+            <div v-if="group !== undefined" style="width: 50%; min-width: min(1024px, 100%); margin-left: auto; margin-right: auto;">
 
                 <h3>File info</h3>
                 <div class="table-responsive">

@@ -4,6 +4,7 @@ import CongestionGraphConfig from "@/components/congestiongraph/data/CongestionG
 import StatisticsConfig from "@/components/stats/data/StatisticsConfig";
 import MultiplexingGraphConfig from "@/components/multiplexinggraph/data/MultiplexingGraphConfig";
 import PacketizationDiagramConfig from "@/components/packetizationdiagram/data/PacketizationDiagramConfig";
+import EventLogConfig from "@/components/eventlog/data/EventLogConfig";
 
 export const useConfigurationStore = defineStore("configurations", {
     state: () => ({
@@ -12,6 +13,7 @@ export const useConfigurationStore = defineStore("configurations", {
         statisticsConfig: new StatisticsConfig(),
         multiplexingGraphConfig: new MultiplexingGraphConfig(),
         packetizationDiagramConfig: new PacketizationDiagramConfig(),
+        eventLogConfig: new EventLogConfig(),
     }),
 });
 
